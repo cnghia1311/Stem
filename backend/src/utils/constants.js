@@ -1,6 +1,6 @@
 export const WHITELIST_DOMAINS = [
-  'http://localhost:5173', // Vite dev
-  'http://localhost:3000'  // Production
+  'http://localhost:5173',
+  'http://localhost:3000'
 ]
 
 export const USER_ROLES = {
@@ -8,14 +8,10 @@ export const USER_ROLES = {
   TEACHER: 'teacher'
 }
 
-// Object chứa prefix cho mỗi block instance trong exported HTML
 export const BLOCK_PREFIXES = {
   'wallet': '',
   'balance': 'bal-',
   'transfer': 'tf-',
-  'gacha-drop': 'gacha-',
-  'drop-gallery': 'gallery-',
-  'drop-airdrop': 'airdrop-',
   'profile-gallery': 'profile-',
   'market-list': 'mklist-',
   'market-cancel': 'mkcancel-',
@@ -30,5 +26,21 @@ export const BLOCK_PREFIXES = {
   'mint-nft': 'mint-',
   'market-factory': 'mf-',
   'voting-factory': 'vf-',
-  'admin-revoke': 'revoke-'
+  'admin-revoke': 'revoke-',
+  'erc1155-factory': '1155f-',
+  'mint-1155': 'm1155-',
+  'update-erc1155': 'u1155-',
+  'grant-minter-1155': 'g1155-',
+  'free-claim-1155': 'fc1155-',
+  'update-erc721': 'u721-',
+  'grant-minter-721': 'g721-',
+  'free-claim-721': 'fc721-',
+  'multisig-factory': 'msf-',
+  'multisig-deposit': 'md-',
+  'multisig-dashboard': 'msdb-',
+  'qr-scanner': 'qr-',
+  'qr-generator': 'qrg-',
+  'move-to-earn': 'm2e-',
+  'treasure-hunt': 'th-'
 }
+

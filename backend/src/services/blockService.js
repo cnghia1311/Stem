@@ -5,7 +5,7 @@ import { blockCache } from '../engine/blockCache.js'
  * Sidebar dùng để hiển thị danh sách block
  */
 const getMetadata = async () => {
-  return blockCache.getAllMetadata()
+  return blockCache.getAllMeta()
 }
 
 /**
@@ -18,10 +18,11 @@ const getBatchCode = async (blockIds) => {
   for (const id of blockIds) {
     const block = blockCache.getBlock(id)
     if (block) {
+      const html = typeof block.exportHtml === 'function' ? block.exportHtml('Token', {}) : (block.exportHtml || '')
       result[id] = {
-        exportHtml: block.exportHtml || '',
-        engineCode: block.engineCode || '',
-        globalCode: block.globalCode || ''
+        exportHtml: html,
+        engineCode: typeof block.engineCode === 'function' ? block.engineCode('') : (block.engineCode || ''),
+        globalCode: typeof block.globalCode === 'function' ? block.globalCode() : (block.globalCode || '')
       }
     }
   }

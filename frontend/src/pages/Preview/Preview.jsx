@@ -16,9 +16,6 @@ function MockBlock({ blockId }) {
     'balance': { display: '💰 1,250.00 TOKEN', btn: '🔄 Cập Nhật' },
     'transfer': { display: 'Nhập địa chỉ nhận...', btn: '🚀 Gửi Token' },
     'claim': { display: '🎁 Claim Token miễn phí', btn: '🎁 Nhận Ngay' },
-    'gacha-drop': { display: '🎲 Tỉ lệ: Common 60% | Rare 30% | Epic 10%', btn: '🎰 Quay Gacha' },
-    'drop-gallery': { display: '🖼️ 3 NFT đã sở hữu', btn: null },
-    'drop-airdrop': { display: '🎁 Số lượng còn lại: 847', btn: '🎁 Nhận Airdrop' },
     'profile-gallery': { display: '🪪 SBT #0042', btn: null },
     'market-list': { display: '📋 Chọn NFT để bán', btn: '📝 Đăng Bán' },
     'market-cancel': { display: '🛑 2 lệnh đang bán', btn: '❌ Hủy Tất Cả' },
@@ -34,6 +31,7 @@ function MockBlock({ blockId }) {
     'market-factory': { display: '🏪 Tên: Marketplace Tranh Lớp 10A1', btn: '🚀 Tạo Marketplace' },
     'voting-factory': { display: '🗳️ Token: StemCoin | Ứng viên: A, B, C', btn: '🚀 Tạo Phòng Bầu Cử' },
     'admin-revoke': { display: '🔥 Token ID: #0 | ⚠️ Chỉ dành cho Admin', btn: '🔥 Thu Hồi Ngay' },
+    'mint-erc721-random': { display: '🎰 Mint NFT Random | Đổ Mint theo Weight', btn: '🎰 Mở Rương Ngay' }
   }
 
   const mock = mockContent[blockId] || { display: block.desc, btn: null }

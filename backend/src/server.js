@@ -34,11 +34,12 @@ const START_SERVER = () => {
   app.use(errorHandlingMiddleware)
 
   // Start server
-  app.listen(env.PORT, () => {
+  app.listen(env.PORT, '0.0.0.0', () => {
     console.log('')
     console.log('🚀 ═══════════════════════════════════════════')
     console.log(`   STEM Web3 Builder API`)
-    console.log(`   Running at: http://localhost:${env.PORT}`)
+    console.log(`   Local:   http://localhost:${env.PORT}`)
+    console.log(`   Network: http://0.0.0.0:${env.PORT}`)
     console.log(`   Mode: ${env.BUILD_MODE}`)
     console.log('═══════════════════════════════════════════════')
     console.log('')

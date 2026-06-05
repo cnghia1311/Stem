@@ -21,6 +21,9 @@ export default {
             <label style="display:block;font-size:12px;color:#ef4444;margin-bottom:6px;font-weight:bold;">Địa chỉ Bộ Sưu Tập (Contract)</label>
             <input type="text" id="revoke-collection-addr" placeholder="Dán địa chỉ Bộ Sưu Tập (0x...)" style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;margin-bottom:12px;">
 
+            <label style="display:block;font-size:12px;color:#ef4444;margin-bottom:6px;font-weight:bold;">Ví Học Sinh Bị Thu Hồi (Bắt buộc với ERC-1155)</label>
+            <input type="text" id="revoke-student-addr" placeholder="0x... (Địa chỉ ví học sinh)" style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;margin-bottom:12px;">
+
             <label style="display:block;font-size:12px;color:#ef4444;margin-bottom:6px;font-weight:bold;">Token ID Cần Thu Hồi</label>
             <input type="number" id="revoke-token-id" placeholder="Ví dụ: 0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;margin-bottom:4px;">
             <div style="font-size:10px;color:#64748b;margin-bottom:6px;">⚠️ Cảnh báo: Chỉ có Owner (người tạo ra Bộ Sưu Tập) mới có quyền thực hiện.</div>
@@ -33,6 +36,7 @@ export default {
     engineCode: (pfx) => `
         const STEM_NFT_REVOKE_ABI = [
             "function revokeCertificate(uint256 tokenId) public",
+            "function revokeBadge(address from, uint256 id, uint256 amount) public",
             "function owner() view returns (address)"
         ];
 
@@ -40,11 +44,13 @@ export default {
             if (!signer) { toast('error', 'Cần kết nối ví (🦊) trước!'); return; }
             
             const addrInput = document.getElementById('revoke-collection-addr');
+            const studentInput = document.getElementById('revoke-student-addr');
             const idInput = document.getElementById('revoke-token-id');
             const btn = document.getElementById('revoke-btn');
             const statusEl = document.getElementById('revoke-status');
 
             const colAddr = addrInput.value.trim();
+            const studentAddr = studentInput.value.trim();
             const tokenId = idInput.value.trim();
 
             if (!colAddr || colAddr.length !== 42) { toast('error', 'Nhập địa chỉ Bộ Sưu Tập hợp lệ!'); return; }
@@ -59,6 +65,7 @@ export default {
                 // Kiểm tra quyền Owner
                 try {
                     const contractOwner = await contract.owner();
+                    const userAddr = await signer.getAddress();
                     if (contractOwner.toLowerCase() !== userAddr.toLowerCase()) {
                         throw new Error('Bạn không phải Owner của bộ sưu tập này!');
                     }
@@ -68,7 +75,25 @@ export default {
 
                 statusEl.innerHTML = '<span style="color:#ef4444;">🔥 Đang gửi lệnh thu hồi... (Xác nhận trên MetaMask)</span>';
                 
-                const tx = await contract.revokeCertificate(tokenId);
+                let tx;
+                try {
+                    // Thử thu hồi theo chuẩn ERC-1155 trước (vì nó cần truyền địa chỉ ví học sinh)
+                    if (!studentAddr || studentAddr.length !== 42) {
+                        toast('warning', 'Đang thử chuẩn ERC-721 (Vì bạn chưa nhập ví học sinh)');
+                        tx = await contract.revokeCertificate(tokenId);
+                    } else {
+                        // Gọi hàm revokeBadge của ERC-1155 (thu hồi 1 cái)
+                        tx = await contract.revokeBadge(studentAddr, tokenId, 1);
+                    }
+                } catch (err1) {
+                    // Nếu lỗi do hàm không tồn tại, rơi xuống fallback ERC-721
+                    if (err1.message.includes('revokeBadge') || err1.message.includes('is not a function') || err1.message.includes('not recognized')) {
+                        tx = await contract.revokeCertificate(tokenId);
+                    } else {
+                        throw err1;
+                    }
+                }
+
                 statusEl.innerHTML = '<span style="color:#ef4444;">⛏️ Đang đợi Blockchain xác nhận...</span>';
                 
                 await tx.wait();

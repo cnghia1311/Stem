@@ -52,17 +52,39 @@ class BlockCache {
    * Lấy tất cả block metadata
    */
   getAllMeta() {
-    return [...this._blocks.values()].map(b => ({
-      id: b.id,
-      name: b.name,
-      desc: b.desc,
-      color: b.color,
-      label: b.label,
-      required: b.required || false,
-      multiToken: b.multiToken || false,
-      contractKey: b.contractKey || null,
-      config: b.config || null
-    }))
+    return [...this._blocks.values()].map(b => {
+      const html = typeof b.exportHtml === 'function' ? b.exportHtml('STEM', {}) : (b.exportHtml || '')
+
+      // Auto-calculate minHeight from HTML content
+      const countTag = (tag) => (html.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length
+      const numInputs    = countTag('input')
+      const numSelects   = countTag('select')
+      const numTextareas = countTag('textarea')
+      const numButtons   = countTag('button')
+      const numImages    = countTag('img')
+
+      const minHeight = 40                    // padding top+bottom
+        + 27                                  // khoi-title
+        + (numInputs + numSelects) * 50       // each input/select ~50px
+        + numTextareas * 90                   // textarea ~90px
+        + numButtons * 50                     // each button ~50px
+        + numImages * 100                     // image preview ~100px
+        + 20                                  // breathing room
+
+      return {
+        id: b.id,
+        name: b.name,
+        desc: b.desc,
+        color: b.color,
+        label: b.label,
+        required: b.required || false,
+        multiToken: b.multiToken || false,
+        contractKey: b.contractKey || null,
+        config: b.config || null,
+        html,
+        minHeight: Math.max(minHeight, 130)   // never smaller than 130px
+      }
+    })
   }
 
   get size() { return this._blocks.size }

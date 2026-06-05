@@ -8,8 +8,8 @@ const Router = express.Router()
 Router.route('/metadata')
   .get(blockController.getMetadata)
 
-// POST /api/v1/blocks/batch-code — Cần auth
+// POST /api/v1/blocks/batch-code — Tạm thời gỡ auth cho V2
 Router.route('/batch-code')
-  .post(authMiddleware.isAuthorized, blockController.getBatchCode)
+  .post(blockController.getBatchCode)
 
 export const blockRoute = Router
