@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { Rnd } from "react-rnd"
 import { type Block, categoryColors } from "./block-data"
 import { Settings, X, Minus, Plus, Maximize2 } from "lucide-react"
@@ -22,12 +22,22 @@ export interface BlockAnchors {
   left?: BlockAnchor;
 }
 
+export interface BlockLayout {
+  position: { x: number; y: number }
+  size: { width: number; height: number }
+  anchors?: BlockAnchors
+}
+
 export interface CanvasBlock extends Block {
   instanceId: string
   position: { x: number; y: number }
   size: { width: number; height: number }
   html?: string
   anchors?: BlockAnchors
+  layouts?: {
+    mobile?: BlockLayout;
+    desktop?: BlockLayout;
+  }
 }
 
 interface WysiwygCanvasProps {
@@ -42,6 +52,8 @@ interface WysiwygCanvasProps {
   onDrop: (e: React.DragEvent, position: { x: number; y: number }) => void
   deviceType: "mobile" | "tablet" | "desktop"
   contractsConfig?: Record<string, any>
+  extraHeight: number
+  onChangeExtraHeight: (val: number) => void
 }
 
 const deviceSizes = {
@@ -61,7 +73,9 @@ export function WysiwygCanvas({
   onUpdateAnchors,
   onDrop,
   deviceType,
-  contractsConfig
+  contractsConfig,
+  extraHeight,
+  onChangeExtraHeight
 }: WysiwygCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -83,6 +97,9 @@ export function WysiwygCanvas({
   const panStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 })
 
   const device = deviceSizes[deviceType]
+
+  // Sử dụng chiều cao cộng thêm do người dùng nhập
+  const actualCanvasHeight = device.height + extraHeight;
 
   const [canvasActualWidth, setCanvasActualWidth] = useState(device.width);
 
@@ -114,7 +131,7 @@ export function WysiwygCanvas({
       const availableHeight = containerRect.height - padding * 2
 
       const deviceTotalWidth = canvasActualWidth + frameExtraWidth
-      const deviceTotalHeight = device.height + frameExtraHeight
+      const deviceTotalHeight = actualCanvasHeight + frameExtraHeight
 
       const scaleX = availableWidth / deviceTotalWidth
       const scaleY = availableHeight / deviceTotalHeight
@@ -130,7 +147,7 @@ export function WysiwygCanvas({
     calculateScale()
     window.addEventListener("resize", calculateScale)
     return () => window.removeEventListener("resize", calculateScale)
-  }, [device.width, device.height, deviceType, isManualZoom])
+  }, [device.width, actualCanvasHeight, deviceType, isManualZoom])
 
   // Measure natural content height of logic blocks after each render
   useEffect(() => {
@@ -194,7 +211,7 @@ export function WysiwygCanvas({
   }
 
   // Helper to recalculate existing anchors when block is moved or resized
-  const recalculateAnchors = useCallback((block: CanvasBlock, newPos: { x: number, y: number }, newSize: { width: number, height: number }) => {
+  const recalculateAnchors = useCallback((block: CanvasBlock, newPos: { x: number, y: number }, newSize: { width: number, height: number }, overrides?: Record<string, {x: number, y: number, width: number, height: number}>) => {
     if (!block.anchors || Object.keys(block.anchors).length === 0 || !onUpdateAnchors) return;
 
     const anchors = { ...block.anchors };
@@ -214,9 +231,9 @@ export function WysiwygCanvas({
           if (anchor.targetEdge === 'left') newDist = -(newPos.x + newSize.width);
         } else if (edge === 'top') {
           if (anchor.targetEdge === 'top') newDist = newPos.y;
-          if (anchor.targetEdge === 'bottom') newDist = device.height - newPos.y;
+          if (anchor.targetEdge === 'bottom') newDist = actualCanvasHeight - newPos.y;
         } else if (edge === 'bottom') {
-          if (anchor.targetEdge === 'bottom') newDist = device.height - (newPos.y + newSize.height);
+          if (anchor.targetEdge === 'bottom') newDist = anchor.distance; // Giữ nguyên khoảng cách padding để canvas tự giãn
           if (anchor.targetEdge === 'top') newDist = -(newPos.y + newSize.height);
         }
         const roundedDist = Math.round(newDist);
@@ -228,10 +245,14 @@ export function WysiwygCanvas({
         // Sibling target - recalculate based on current sibling position
         const targetBlock = placedBlocks.find(b => b.instanceId === anchor.target);
         if (targetBlock) {
-          const tLeft = targetBlock.position.x;
-          const tRight = targetBlock.position.x + targetBlock.size.width;
-          const tTop = targetBlock.position.y;
-          const tBottom = targetBlock.position.y + targetBlock.size.height;
+          // Use override if available
+          const override = overrides?.[anchor.target];
+          const tLeft = override ? override.x : targetBlock.position.x;
+          const tTop = override ? override.y : targetBlock.position.y;
+          const tWidth = override ? override.width : targetBlock.size.width;
+          const tHeight = override ? override.height : targetBlock.size.height;
+          const tRight = tLeft + tWidth;
+          const tBottom = tTop + tHeight;
 
           let newDist = anchor.distance;
           if (edge === 'left') {
@@ -259,7 +280,7 @@ export function WysiwygCanvas({
     if (changed) {
       onUpdateAnchors(block.instanceId, anchors);
     }
-  }, [device.width, device.height, onUpdateAnchors, placedBlocks]);
+  }, [device.width, actualCanvasHeight, onUpdateAnchors, placedBlocks]);
 
   const handlePanStart = (e: React.PointerEvent) => {
     // Left or middle mouse click to pan
@@ -339,7 +360,7 @@ export function WysiwygCanvas({
       if (activeWire.sourceEdge === 'left' && x < threshold) targetEdge = 'left'
       else if (activeWire.sourceEdge === 'right' && x > device.width - threshold) targetEdge = 'right'
       else if (activeWire.sourceEdge === 'top' && y < threshold) targetEdge = 'top'
-      else if (activeWire.sourceEdge === 'bottom' && y > device.height - threshold) targetEdge = 'bottom'
+      else if (activeWire.sourceEdge === 'bottom' && y > actualCanvasHeight - threshold) targetEdge = 'bottom'
     }
 
     setActiveTargetEdge(targetEdge)
@@ -352,8 +373,6 @@ export function WysiwygCanvas({
     const rect = canvasRef.current.getBoundingClientRect()
     const x = (e.clientX - rect.left) / scale
     const y = (e.clientY - rect.top) / scale
-
-
 
     // Check hit test for canvas edges (parent anchors)
     const threshold = 120
@@ -389,7 +408,7 @@ export function WysiwygCanvas({
       if (activeWire.sourceEdge === 'left' && x < threshold) { target = 'parent'; targetEdge = 'left'; }
       else if (activeWire.sourceEdge === 'right' && x > device.width - threshold) { target = 'parent'; targetEdge = 'right'; }
       else if (activeWire.sourceEdge === 'top' && y < threshold) { target = 'parent'; targetEdge = 'top'; }
-      else if (activeWire.sourceEdge === 'bottom' && y > device.height - threshold) { target = 'parent'; targetEdge = 'bottom'; }
+      else if (activeWire.sourceEdge === 'bottom' && y > actualCanvasHeight - threshold) { target = 'parent'; targetEdge = 'bottom'; }
     }
 
     if (target && targetEdge && onUpdateAnchors) {
@@ -405,9 +424,9 @@ export function WysiwygCanvas({
             if (targetEdge === 'left') distance = -(block.position.x + block.size.width);
           } else if (activeWire.sourceEdge === 'top') {
             if (targetEdge === 'top') distance = block.position.y;
-            if (targetEdge === 'bottom') distance = device.height - block.position.y;
+            if (targetEdge === 'bottom') distance = actualCanvasHeight - block.position.y;
           } else if (activeWire.sourceEdge === 'bottom') {
-            if (targetEdge === 'bottom') distance = device.height - (block.position.y + block.size.height);
+            if (targetEdge === 'bottom') distance = actualCanvasHeight - (block.position.y + block.size.height);
             if (targetEdge === 'top') distance = -(block.position.y + block.size.height);
           }
         } else {
@@ -453,8 +472,6 @@ export function WysiwygCanvas({
     setActiveTargetEdge(null)
     setActiveTargetSibling(null)
   }
-
-  // Custom resize handlers removed in favor of react-rnd
 
   // Check for over-constrained horizontal chains
   const overconstrainedEdges = new Set<string>();
@@ -781,7 +798,7 @@ export function WysiwygCanvas({
 
       <div
         ref={containerRef}
-        className={`w-full h-full overflow-auto relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`w-full h-full overflow-auto relative custom-scrollbar ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={handlePanStart}
         onPointerMove={handlePanMove}
         onPointerUp={handlePanEnd}
@@ -791,7 +808,7 @@ export function WysiwygCanvas({
           className="flex items-center justify-center min-w-full min-h-full p-8"
           style={{
             minWidth: `${(device.width + 48) * scale + 100}px`,
-            minHeight: `${(device.height + 96) * scale + 100}px`
+            minHeight: `${(actualCanvasHeight + 96) * scale + 100}px`
           }}
         >
         {/* Device Frame with Zoom to Fit */}
@@ -828,7 +845,7 @@ export function WysiwygCanvas({
             <div
               ref={canvasRef}
               className="relative bg-[#0a0a0a] cursor-crosshair"
-              style={{ width: device.width, height: device.height }}
+              style={{ width: device.width, height: actualCanvasHeight }}
               onDragOver={handleCanvasDragOver}
               onDrop={handleCanvasDrop}
               onClick={() => onSelectBlock(null)}
@@ -865,10 +882,10 @@ export function WysiwygCanvas({
                     if (activeTargetEdge === 'top') return <rect x={x} y={y - 3} width={w} height={6} fill="#10b981" />;
                     if (activeTargetEdge === 'bottom') return <rect x={x} y={y + h - 3} width={w} height={6} fill="#10b981" />;
                   } else {
-                    if (activeTargetEdge === 'left') return <rect x={0} y={0} width={6} height={device.height} fill="#10b981" />;
-                    if (activeTargetEdge === 'right') return <rect x={device.width - 6} y={0} width={6} height={device.height} fill="#10b981" />;
+                    if (activeTargetEdge === 'left') return <rect x={0} y={0} width={6} height={actualCanvasHeight} fill="#10b981" />;
+                    if (activeTargetEdge === 'right') return <rect x={device.width - 6} y={0} width={6} height={actualCanvasHeight} fill="#10b981" />;
                     if (activeTargetEdge === 'top') return <rect x={0} y={0} width={device.width} height={6} fill="#10b981" />;
-                    if (activeTargetEdge === 'bottom') return <rect x={0} y={device.height - 6} width={device.width} height={6} fill="#10b981" />;
+                    if (activeTargetEdge === 'bottom') return <rect x={0} y={actualCanvasHeight - 6} width={device.width} height={6} fill="#10b981" />;
                   }
                   return null;
                 })()}
@@ -912,7 +929,7 @@ export function WysiwygCanvas({
                       if (anchor.targetEdge === 'left') endX = 0;
                       if (anchor.targetEdge === 'right') endX = device.width;
                       if (anchor.targetEdge === 'top') endY = 0;
-                      if (anchor.targetEdge === 'bottom') endY = device.height;
+                      if (anchor.targetEdge === 'bottom') endY = actualCanvasHeight;
                     } else {
                       // Sibling
                       const siblingBlock = placedBlocks.find(b => b.instanceId === anchor.target);
@@ -933,7 +950,7 @@ export function WysiwygCanvas({
                     // Clamp label position so it stays visible within canvas
                     const labelW = 80, labelH = 28;
                     midX = Math.max(labelW / 2, Math.min(device.width - labelW / 2, midX));
-                    midY = Math.max(labelH / 2, Math.min(device.height - labelH / 2, midY));
+                    midY = Math.max(labelH / 2, Math.min(actualCanvasHeight - labelH / 2, midY));
                     const isEditing = editingAnchor?.blockId === block.instanceId && editingAnchor?.edge === edge;
                     const isFlex = anchor.stiffness === 'flex' || (!anchor.stiffness && anchor.target !== 'parent');
                     const isOverconstrained = overconstrainedEdges.has(`${block.instanceId}-${edge}`);
@@ -1011,14 +1028,23 @@ export function WysiwygCanvas({
                                          if (edge === 'left') newX = newDist;
                                          if (edge === 'top') newY = newDist;
                                          if (edge === 'right') newX = device.width - newDist - block.size.width;
-                                         if (edge === 'bottom') newY = device.height - newDist - block.size.height;
+                                         if (edge === 'bottom') newY = actualCanvasHeight - newDist - block.size.height;
                                        } else {
                                          const sibling = placedBlocks.find(b => b.instanceId === anchor.target);
                                          if (sibling) {
-                                           if (edge === 'left' && anchor.targetEdge === 'right') newX = sibling.position.x + sibling.size.width + newDist;
-                                           if (edge === 'right' && anchor.targetEdge === 'left') newX = sibling.position.x - newDist - block.size.width;
-                                           if (edge === 'top' && anchor.targetEdge === 'bottom') newY = sibling.position.y + sibling.size.height + newDist;
-                                           if (edge === 'bottom' && anchor.targetEdge === 'top') newY = sibling.position.y - newDist - block.size.height;
+                                           if (edge === 'left') {
+                                             if (anchor.targetEdge === 'right') newX = sibling.position.x + sibling.size.width + newDist;
+                                             else if (anchor.targetEdge === 'left') newX = sibling.position.x + newDist;
+                                           } else if (edge === 'right') {
+                                             if (anchor.targetEdge === 'left') newX = sibling.position.x - newDist - block.size.width;
+                                             else if (anchor.targetEdge === 'right') newX = sibling.position.x + sibling.size.width - newDist - block.size.width;
+                                           } else if (edge === 'top') {
+                                             if (anchor.targetEdge === 'bottom') newY = sibling.position.y + sibling.size.height + newDist;
+                                             else if (anchor.targetEdge === 'top') newY = sibling.position.y + newDist;
+                                           } else if (edge === 'bottom') {
+                                             if (anchor.targetEdge === 'top') newY = sibling.position.y - newDist - block.size.height;
+                                             else if (anchor.targetEdge === 'bottom') newY = sibling.position.y + sibling.size.height - newDist - block.size.height;
+                                           }
                                          }
                                        }
                                        if (onMoveBlock && (newX !== block.position.x || newY !== block.position.y)) {
@@ -1040,7 +1066,7 @@ export function WysiwygCanvas({
                                        if (edge === 'left') newX = newDist;
                                        if (edge === 'top') newY = newDist;
                                        if (edge === 'right') newX = device.width - newDist - block.size.width;
-                                       if (edge === 'bottom') newY = device.height - newDist - block.size.height;
+                                       if (edge === 'bottom') newY = actualCanvasHeight - newDist - block.size.height;
                                      } else {
                                        const sibling = placedBlocks.find(b => b.instanceId === anchor.target);
                                        if (sibling) {
@@ -1060,9 +1086,14 @@ export function WysiwygCanvas({
                              ) : (
                                <span onClick={(e) => {
                                  e.stopPropagation();
-                                 setEditingAnchor({ blockId: block.instanceId, edge, value: String(anchor.distance) });
+                                 const currentVal = anchor.target === 'parent' && edge === 'bottom' 
+                                   ? Math.round(actualCanvasHeight - (block.position.y + block.size.height))
+                                   : anchor.distance;
+                                 setEditingAnchor({ blockId: block.instanceId, edge, value: String(currentVal) });
                                }} className="px-1 py-0.5 hover:bg-white/10 rounded transition-colors" title="Click để sửa số">
-                                 {anchor.distance}
+                                 {anchor.target === 'parent' && edge === 'bottom' 
+                                   ? Math.round(actualCanvasHeight - (block.position.y + block.size.height))
+                                   : anchor.distance}
                                </span>
                              )}
                           </div>
@@ -1090,14 +1121,23 @@ export function WysiwygCanvas({
                     position={{ x: block.position.x, y: block.position.y }}
                     onDragStop={(e, d) => {
                       const newX = Math.max(0, Math.min(d.x, device.width - blockWidth))
-                      const newY = Math.max(0, Math.min(d.y, device.height - block.size.height))
+                      const newY = Math.max(0, d.y)
                       const newPos = { x: newX, y: newY }
                       onMoveBlock(block.instanceId, newPos)
                       recalculateAnchors(block, newPos, { width: blockWidth, height: block.size.height })
+                      const overrides = { [block.instanceId]: { ...newPos, width: blockWidth, height: block.size.height } }
+                      placedBlocks.forEach(otherBlock => {
+                        if (otherBlock.instanceId === block.instanceId || !otherBlock.anchors) return;
+                        let targetsThis = false;
+                        (['top', 'right', 'bottom', 'left'] as AnchorEdge[]).forEach(e => {
+                          if (otherBlock.anchors![e]?.target === block.instanceId) targetsThis = true;
+                        });
+                        if (targetsThis) recalculateAnchors(otherBlock, otherBlock.position, otherBlock.size, overrides);
+                      });
                     }}
                     onResizeStop={(e, direction, ref, delta, position) => {
                       const newWidth = Math.min(parseInt(ref.style.width, 10), device.width)
-                      let newHeight = Math.min(parseInt(ref.style.height, 10), device.height)
+                      let newHeight = parseInt(ref.style.height, 10)
 
                       // If block has HTML, measure if content fits at new width
                       if (block.html) {
@@ -1120,17 +1160,25 @@ export function WysiwygCanvas({
 
                       onResizeBlock(block.instanceId, { width: newWidth, height: newHeight })
                       const clampedX = Math.max(0, Math.min(position.x, device.width - newWidth))
-                      const clampedY = Math.max(0, Math.min(position.y, device.height - newHeight))
+                      const clampedY = Math.max(0, position.y)
                       const newPos = { x: clampedX, y: clampedY }
                       onMoveBlock(block.instanceId, newPos)
                       recalculateAnchors(block, newPos, { width: newWidth, height: newHeight })
+                      const overrides = { [block.instanceId]: { ...newPos, width: newWidth, height: newHeight } }
+                      placedBlocks.forEach(otherBlock => {
+                        if (otherBlock.instanceId === block.instanceId || !otherBlock.anchors) return;
+                        let targetsThis = false;
+                        (['top', 'right', 'bottom', 'left'] as AnchorEdge[]).forEach(e => {
+                          if (otherBlock.anchors![e]?.target === block.instanceId) targetsThis = true;
+                        });
+                        if (targetsThis) recalculateAnchors(otherBlock, otherBlock.position, otherBlock.size, overrides);
+                      });
                     }}
                     enableResizing={true}
                     minWidth={block.blockType === "decorative" ? 50 : block.defaultSize.width}
                     minHeight={block.blockType === "logic"
                       ? (blockNaturalHeights[block.instanceId] || block.defaultSize.height)
                       : block.blockType === "decorative" ? 20 : 40}
-                    bounds="parent"
                     cancel=".anchor-handle"
                     className={`
                       absolute group
@@ -1327,13 +1375,32 @@ export function WysiwygCanvas({
                   </div>
                 </div>
               )}
+              {/* Canvas Size Label / Editor */}
+              <div
+                className="absolute inset-x-0 -bottom-10 flex justify-center pointer-events-auto"
+              >
+                <div className="flex items-center gap-2 bg-[#1e293b] px-3 py-1.5 rounded-full text-xs text-muted-foreground border border-[#334155] shadow-lg">
+                  <span>{device.width} x {device.height}</span>
+                  <span className="text-emerald-400 font-bold">+</span>
+                  <div className="relative flex items-center">
+                    <input 
+                      type="number" 
+                      value={extraHeight || ''} 
+                      onChange={e => onChangeExtraHeight(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-14 bg-[#0f172a] text-emerald-400 font-mono text-center outline-none border border-[#334155] focus:border-emerald-500 rounded px-1 py-0.5"
+                    />
+                  </div>
+                  <span className="font-bold">= {actualCanvasHeight}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Device label */}
         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-muted-foreground font-mono whitespace-nowrap">
-          {device.width} x {device.height}
+          {device.width} x {actualCanvasHeight}
         </div>
       </div>
       </div>

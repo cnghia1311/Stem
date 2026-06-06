@@ -14,9 +14,36 @@ class Assembler {
    */
   buildFullHtml(tabs, config, contracts, cache) {
     const tokenName = config.tokenName || config.title || 'STEM'
-    const shell = getHtmlShell({ ...config, tokenName })
 
-    let bodyHtml = ''
+    // Quét toàn bộ tabs xem có bất kỳ khối nào có mobile layout không
+    const globalHasMobileLayout = tabs.some(tab =>
+      (tab.blocks || []).some(b => b.layouts && b.layouts.mobile)
+    )
+
+    const shell = getHtmlShell({ ...config, tokenName, hasMobileLayout: globalHasMobileLayout })
+
+    let bodyHtml = '';
+    let maxDesktopH = 800;
+    let maxMobileH = 667;
+
+    tabs.forEach(tab => {
+      const tabDesktopH = 800 + (tab.extraHeight?.desktop || 0);
+      const tabMobileH = 667 + (tab.extraHeight?.mobile || 0);
+      if (tabDesktopH > maxDesktopH) maxDesktopH = tabDesktopH;
+      if (tabMobileH > maxMobileH) maxMobileH = tabMobileH;
+
+      (tab.blocks || []).forEach(block => {
+        let desktop = block.layouts?.desktop;
+        if (!desktop && block.position) {
+          desktop = { position: block.position, size: block.size, anchors: block.anchors };
+        }
+      });
+    });
+
+    let layoutStyles = `
+#app-root { --design-w: 1280; --design-h: ${maxDesktopH}; }
+@media (max-width: 600px) { #app-root { --design-w: 375; --design-h: ${maxMobileH}; } }
+`
     const engineParts = []
     const globalParts = []
     const bindingParts = []
@@ -36,31 +63,86 @@ class Assembler {
       // Container of each tab needs position: relative to hold absolute blocks
       // We assume a default canvas height of 800px for now, can be responsive later
       const deviceLayout = config.layout || 'desktop'
-      const deviceW = deviceLayout === 'desktop' ? 1280 : deviceLayout === 'tablet' ? 768 : 375
-      const deviceH = deviceLayout === 'desktop' ? 800 : deviceLayout === 'tablet' ? 1024 : 667
+      const deviceW = deviceLayout === 'desktop' ? 1280 : 375
+      const deviceH = deviceLayout === 'desktop' ? 800 : 667
       bodyHtml += `<div class="tab-content${tabIdx === 0 ? ' active' : ''}" id="tab-${tabIdx}" style="position: relative; width: 100%; min-height: 100vh; background: transparent;">\n`
 
       const blocks = tab.blocks || []
+      const hasMobileLayout = blocks.some(b => b.layouts && b.layouts.mobile)
+      const hasDesktopLayout = blocks.some(b => b.layouts && b.layouts.desktop)
+
+      // Viewport fallback đã được xử lý ở template.js (HEAD)
+      
+      if (!hasDesktopLayout && hasMobileLayout) {
+        // Nếu chỉ thiết kế mobile mà bỏ quên desktop, mô phỏng giao diện điện thoại giữa màn hình máy tính
+        layoutStyles += `@media (min-width: 601px) { #tab-${tabIdx} { max-width: 375px; margin: 0 auto; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); overflow: hidden; background: #0f172a; } }\n`
+      }
+
       for (const block of blocks) {
         const blockId = block.id
-        const pos = block.position || { x: 0, y: 0 }
-        const size = block.size || { width: 200, height: 50 }
-        const isStretchable = block.category === "Decorative" || block.category === "Layout/Navigation";
-        
-        // Wrapper for Absolute Positioning
-        const wrapperStyle = `position: absolute; left: ${pos.x}px; top: ${pos.y}px; width: ${size.width}px; height: ${size.height}px;`
         const instanceId = block.instanceId || blockId
-        const anchorsJson = JSON.stringify(block.anchors || {})
-        bodyHtml += `  <div class="block-wrapper" id="block-${instanceId}" data-anchors='${anchorsJson}' data-default-x="${pos.x}" data-default-y="${pos.y}" data-w="${size.width}" data-h="${size.height}" data-stretchable="${isStretchable}" style="${wrapperStyle}">\n`
+
+        let layouts = block.layouts
+        if (!layouts || Object.keys(layouts).length === 0) {
+          layouts = {
+            desktop: {
+              position: block.position || { x: 0, y: 0 },
+              size: block.size || { width: 200, height: 50 }
+            }
+          }
+        }
+
+        let desk = layouts.desktop
+        if (!hasDesktopLayout && layouts.mobile) {
+           desk = layouts.mobile // Mượn tạm layout mobile làm nền tảng
+        }
+
+        const buildPosCss = (lay, parentW, parentH, isMobile = false) => {
+          let s = `{ ${isMobile ? 'display: block !important; ' : ''}position: absolute; `
+          if (lay.anchors) {
+            let hasL = false, hasR = false, hasT = false, hasB = false;
+            if (lay.anchors.left && lay.anchors.left.target === 'parent') { s += `left: ${lay.anchors.left.distance}px; `; hasL = true; }
+            if (lay.anchors.right && lay.anchors.right.target === 'parent') { s += `right: ${lay.anchors.right.distance}px; `; hasR = true; }
+            if (!hasL && !hasR) s += `left: ${(lay.position.x / parentW * 100).toFixed(4)}%; `
+
+            if (lay.anchors.top && lay.anchors.top.target === 'parent') { s += `top: ${lay.anchors.top.distance}px; `; hasT = true; }
+            if (lay.anchors.bottom && lay.anchors.bottom.target === 'parent') { s += `bottom: ${lay.anchors.bottom.distance}px; `; hasB = true; }
+            if (!hasT && !hasB) s += `top: ${(lay.position.y / parentH * 100).toFixed(4)}%; `
+            
+            s += `width: ${hasL && hasR ? 'auto' : lay.size.width + 'px'}; `
+            s += `height: ${hasT && hasB ? 'auto' : lay.size.height + 'px'}; `
+          } else {
+            s += `left: ${(lay.position.x / parentW * 100).toFixed(4)}%; top: ${(lay.position.y / parentH * 100).toFixed(4)}%; width: ${lay.size.width}px; height: ${lay.size.height}px; `
+          }
+          return s + '}'
+        }
+
+        const tabDesktopH = 800 + (tab.extraHeight?.desktop || 0);
+        const tabMobileH = 667 + (tab.extraHeight?.mobile || 0);
+
+        if (desk) {
+          layoutStyles += `#block-${instanceId} ${buildPosCss(desk, 1280, tabDesktopH)}\n`
+        } else {
+          layoutStyles += `#block-${instanceId} { display: none; }\n`
+        }
+
+        if (layouts.mobile) {
+          layoutStyles += `@media (max-width: 600px) { #block-${instanceId} ${buildPosCss(layouts.mobile, 375, tabMobileH, true)} }\n`
+        } else if (hasMobileLayout) {
+          // Chỉ giấu khối trên Mobile nếu thực sự có ít nhất 1 khối được xếp trên Mobile
+          layoutStyles += `@media (max-width: 600px) { #block-${instanceId} { display: none !important; } }\n`
+        }
+
+        bodyHtml += `  <div class="block-wrapper" id="block-${instanceId}">\n`
 
         if (block.blockType === 'decorative') {
           // Render decorative blocks (text, containers) based on frontend data
           if (block.html) {
-             bodyHtml += `    ${block.html}\n`
+            bodyHtml += `    ${block.html}\n`
           } else if (blockId === 'text-title') {
-             bodyHtml += `    <h2 style="margin:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:white; font-size: 24px;">${block.title || 'Text'}</h2>\n`
+            bodyHtml += `    <h2 style="margin:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:white; font-size: 24px;">${block.title || 'Text'}</h2>\n`
           } else {
-             bodyHtml += `    <div style="width:100%; height:100%; background:rgba(255,255,255,0.1); border-radius:12px;"></div>\n`
+            bodyHtml += `    <div style="width:100%; height:100%; background:rgba(255,255,255,0.1); border-radius:12px;"></div>\n`
           }
         } else {
           // Xử lý Dynamic Link Blocks
@@ -83,7 +165,7 @@ class Assembler {
             if (layout !== 'bg-image' && img) {
               innerHtml += `<img src="${img}" style="width:24px;height:24px;object-fit:contain;" />`
             }
-            innerHtml += `<span style="z-index:10; ${layout==='bg-image' ? 'text-shadow:0 2px 4px rgba(0,0,0,0.8);' : ''}">${text}</span>`
+            innerHtml += `<span style="z-index:10; ${layout === 'bg-image' ? 'text-shadow:0 2px 4px rgba(0,0,0,0.8);' : ''}">${text}</span>`
 
             const buttonHtml = `
               <button onclick="switchTab(${targetIdx})" style="width:100%;height:100%;border:none;border-radius:8px;cursor:pointer;color:white;font-weight:bold;display:flex;align-items:center;justify-content:center;gap:8px;flex-direction:${flexDir};background:${bgStyle};transition:all 0.2s;">
@@ -116,38 +198,38 @@ class Assembler {
 
               bodyHtml += blockHtml + '\n'
 
-            // Thu thập engine code
-            if (cachedBlock.engineCode && !usedBlockIds.has(blockId + '-engine')) {
-              usedBlockIds.add(blockId + '-engine')
-              const code = typeof cachedBlock.engineCode === 'function'
-                ? cachedBlock.engineCode('')
-                : cachedBlock.engineCode
-              if (code) engineParts.push(code)
-            }
+              // Thu thập engine code
+              if (cachedBlock.engineCode && !usedBlockIds.has(blockId + '-engine')) {
+                usedBlockIds.add(blockId + '-engine')
+                const code = typeof cachedBlock.engineCode === 'function'
+                  ? cachedBlock.engineCode('')
+                  : cachedBlock.engineCode
+                if (code) engineParts.push(code)
+              }
 
-            // Thu thập global code
-            if (cachedBlock.globalCode && !usedBlockIds.has(blockId + '-global')) {
-              usedBlockIds.add(blockId + '-global')
-              const code = typeof cachedBlock.globalCode === 'function'
-                ? cachedBlock.globalCode()
-                : cachedBlock.globalCode
-              if (code) globalParts.push(code)
-            }
+              // Thu thập global code
+              if (cachedBlock.globalCode && !usedBlockIds.has(blockId + '-global')) {
+                usedBlockIds.add(blockId + '-global')
+                const code = typeof cachedBlock.globalCode === 'function'
+                  ? cachedBlock.globalCode()
+                  : cachedBlock.globalCode
+                if (code) globalParts.push(code)
+              }
 
-            // Thu thập bindings
-            if (cachedBlock.bindings && !usedBlockIds.has(blockId + '-bind')) {
-              usedBlockIds.add(blockId + '-bind')
-              cachedBlock.bindings.forEach(b => {
-                const event = b.event || 'click'
-                bindingParts.push(`document.getElementById('${b.btn}')?.addEventListener('${event}',${b.fn});`)
-              })
-            }
+              // Thu thập bindings
+              if (cachedBlock.bindings && !usedBlockIds.has(blockId + '-bind')) {
+                usedBlockIds.add(blockId + '-bind')
+                cachedBlock.bindings.forEach(b => {
+                  const event = b.event || 'click'
+                  bindingParts.push(`document.getElementById('${b.btn}')?.addEventListener('${event}',${b.fn});`)
+                })
+              }
             } else {
               bodyHtml += `    <div class="khoi" style="border-left-color:#666;opacity:0.5;"><div class="khoi-title">⚠️ Block not found: ${blockId}</div></div>\n`
             }
           }
         }
-        
+
         bodyHtml += `  </div>\n` // close block-wrapper
       }
 
@@ -162,8 +244,7 @@ class Assembler {
 }\n`
       : ''
 
-    // ═══ Nối tất cả ═══
-    const fullHtml = shell.head
+    const fullHtml = shell.head.replace('</head>', '<style id="responsive-layouts">\n' + layoutStyles + '</style>\n</head>')
       + bodyHtml
       + shell.foot
       + '\n<script>\n'
