@@ -10,13 +10,14 @@ interface PlacedBlockData extends Block {
   instanceId: string
   position?: { x: number; y: number }
   size?: { width: number; height: number }
+  isFixed?: boolean
 }
 
 interface InspectorPanelProps {
   selectedBlock: PlacedBlockData | null
   contractsConfig: Record<string, any>
   onUpdateContract: (blockId: string, fieldKey: string, value: string) => void
-  onUpdateDecorative: (instanceId: string, fieldKey: string, value: string) => void
+  onUpdateDecorative: (instanceId: string, fieldKey: string, value: any) => void
   appConfig?: Record<string, any>
   onUpdateAppConfig?: (key: string, value: any) => void
 }
@@ -119,6 +120,25 @@ export function InspectorPanel({
                 </div>
               </div>
             )}
+
+            {/* Fixed Position Toggle */}
+            <div className="p-4 rounded-lg bg-secondary/30 border border-border flex items-center justify-between">
+              <div>
+                <Label htmlFor="fixed-toggle" className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Move className="w-3 h-3 text-neon-purple" />
+                  Ghim lơ lửng (Fixed)
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">Khối sẽ trôi nổi trên màn hình và không bị cuộn.</p>
+              </div>
+              <Switch
+                id="fixed-toggle"
+                checked={!!selectedBlock.isFixed}
+                onCheckedChange={(checked) => {
+                  onUpdateDecorative(selectedBlock.instanceId, "isFixed", checked);
+                }}
+                className="data-[state=checked]:bg-[#d946ef]"
+              />
+            </div>
 
             {/* Form inputs */}
             <div className="space-y-4 border-t border-border pt-6">

@@ -81,31 +81,53 @@ export default function App() {
   const handleDrop = useCallback(async (e: React.DragEvent, position: { x: number; y: number }) => {
     e.preventDefault()
     if (draggedBlock) {
-      // Nếu block đã có instanceId (nghĩa là kéo từ Khay Nhớ)
       if ((draggedBlock as CanvasBlock).instanceId) {
         const instanceId = (draggedBlock as CanvasBlock).instanceId;
-        setPageBlocks(prev => ({
-          ...prev,
-          [currentPage]: (prev[currentPage] || []).map(b => {
-            if (b.instanceId === instanceId) {
-              return {
-                ...b,
-                position, // Cập nhật position
-                size: { ...(b.defaultSize || { width: 300, height: 150 }) }, // Trả về kích thước mặc định cho thiết bị mới
-                anchors: undefined, // Xóa neo cũ
-                layouts: {
-                  ...(b.layouts || {}),
-                  [deviceType]: { 
-                    position, 
-                    size: { ...(b.defaultSize || { width: 300, height: 150 }) }, 
-                    anchors: undefined 
+        setPageBlocks(prev => {
+          const currentBlocks = prev[currentPage] || [];
+          let newParentId = undefined;
+          const containers = currentBlocks.filter(b => b.blockType === 'decorative' && b.id === 'container' && b.instanceId !== instanceId);
+          containers.sort((a, b) => (a.size.width * a.size.height) - (b.size.width * b.size.height));
+
+          const centerX = position.x + (draggedBlock.size?.width || 300) / 2;
+          const centerY = position.y + (draggedBlock.size?.height || 150) / 2;
+
+          for (const c of containers) {
+            if (
+              centerX >= c.position.x &&
+              centerX <= c.position.x + c.size.width &&
+              centerY >= c.position.y &&
+              centerY <= c.position.y + c.size.height
+            ) {
+              newParentId = c.instanceId;
+              break;
+            }
+          }
+
+          return {
+            ...prev,
+            [currentPage]: currentBlocks.map(b => {
+              if (b.instanceId === instanceId) {
+                return {
+                  ...b,
+                  position,
+                  parentId: newParentId,
+                  size: { ...(b.defaultSize || { width: 300, height: 150 }) },
+                  anchors: undefined,
+                  layouts: {
+                    ...(b.layouts || {}),
+                    [deviceType]: {
+                      position,
+                      size: { ...(b.defaultSize || { width: 300, height: 150 }) },
+                      anchors: undefined
+                    }
                   }
                 }
               }
-            }
-            return b;
-          })
-        }))
+              return b;
+            })
+          }
+        })
         setSelectedBlockId(instanceId)
         setDraggedBlock(null)
         return
@@ -121,12 +143,38 @@ export default function App() {
           [deviceType]: { position, size: { ...draggedBlock.defaultSize } }
         }
       }
-      
-      setPageBlocks(prev => ({
-        ...prev,
-        [currentPage]: [...(prev[currentPage] || []), newBlock]
-      }))
-      setSelectedBlockId(newBlock.instanceId)
+      setPageBlocks(prev => {
+        const currentBlocks = prev[currentPage] || [];
+
+        let newParentId = undefined;
+        const containers = currentBlocks.filter(b => b.blockType === 'decorative' && b.id === 'container');
+        containers.sort((a, b) => (a.size.width * a.size.height) - (b.size.width * b.size.height));
+
+        const centerX = position.x + draggedBlock.defaultSize.width / 2;
+        const centerY = position.y + draggedBlock.defaultSize.height / 2;
+
+        for (const c of containers) {
+          if (
+            centerX >= c.position.x &&
+            centerX <= c.position.x + c.size.width &&
+            centerY >= c.position.y &&
+            centerY <= c.position.y + c.size.height
+          ) {
+            newParentId = c.instanceId;
+            break;
+          }
+        }
+
+        const newBlockWithParent = { ...newBlock, parentId: newParentId };
+
+        // Schedule selection update outside of setPageBlocks
+        setTimeout(() => setSelectedBlockId(newBlock.instanceId), 0);
+
+        return {
+          ...prev,
+          [currentPage]: [...currentBlocks, newBlockWithParent]
+        }
+      })
 
       // HTML đã có sẵn trong block.html từ API metadata
       if (newBlock.blockType === "logic" && newBlock.html) {
@@ -141,52 +189,179 @@ export default function App() {
     setSelectedBlockId(instanceId)
   }, [])
 
-  const handleRemoveBlock = useCallback((id: string) => {
-    setPageBlocks(prev => ({
-      ...prev,
-      [currentPage]: (prev[currentPage] || []).map(b => {
-        if (b.instanceId === id) {
-           const newLayouts = { ...(b.layouts || {}) };
-           delete newLayouts[deviceType]; // Cất vào khay
-           return { ...b, layouts: newLayouts };
+  const handleDuplicateBlock = useCallback((id: string) => {
+    setPageBlocks(prev => {
+      const currentBlocks = prev[currentPage] || [];
+      const originalBlock = currentBlocks.find(b => b.instanceId === id);
+      if (!originalBlock) return prev;
+
+      // Find blocks to duplicate (the block itself, and its children if it's a container)
+      const blocksToDuplicate = [originalBlock];
+      if (originalBlock.id === 'container') {
+        currentBlocks.forEach(b => {
+          if (b.parentId === id) blocksToDuplicate.push(b);
+        });
+      }
+
+      // Create a mapping from old instanceId to new instanceId
+      const idMap: Record<string, string> = {};
+      const newTime = Date.now();
+      blocksToDuplicate.forEach((b, index) => {
+        idMap[b.instanceId] = `${b.id}-${newTime + index}`;
+      });
+
+      // Create deep copies
+      const newBlocks = blocksToDuplicate.map(b => {
+        const newInstanceId = idMap[b.instanceId];
+        const newPosition = { x: b.position.x + 30, y: b.position.y + 30 };
+
+        let resolvedParentId = b.parentId;
+        if (b.parentId && idMap[b.parentId]) {
+          resolvedParentId = idMap[b.parentId];
         }
-        
-        // Xóa neo trỏ tới khối vừa bị cất vào khay (cho thiết bị hiện tại)
+
+        // Handle anchors
+        const newAnchors = b.anchors ? { ...b.anchors } : undefined;
+        if (newAnchors) {
+          (['top', 'right', 'bottom', 'left'] as AnchorEdge[]).forEach(e => {
+            const anchor = newAnchors[e];
+            if (anchor) {
+              if (anchor.target === 'parent') {
+                // Keep parent anchor
+              } else if (idMap[anchor.target as string]) {
+                // Target is in the duplicated group
+                newAnchors[e] = { ...anchor, target: idMap[anchor.target as string] };
+              } else {
+                // Target is outside the duplicated group, clear it
+                delete newAnchors[e];
+              }
+            }
+          });
+        }
+
+        return {
+          ...b,
+          instanceId: newInstanceId,
+          parentId: resolvedParentId,
+          position: newPosition,
+          anchors: newAnchors && Object.keys(newAnchors).length > 0 ? newAnchors : undefined,
+          layouts: {
+            ...(b.layouts || {}),
+            [deviceType]: {
+              position: newPosition,
+              size: b.size,
+              anchors: newAnchors && Object.keys(newAnchors).length > 0 ? newAnchors : undefined,
+            }
+          }
+        };
+      });
+
+      setTimeout(() => setSelectedBlockId(idMap[id]), 0);
+
+      return {
+        ...prev,
+        [currentPage]: [...currentBlocks, ...newBlocks]
+      };
+    });
+  }, [currentPage, deviceType]);
+
+  const handleRemoveBlock = useCallback((id: string) => {
+    setPageBlocks(prev => {
+      const currentBlocks = prev[currentPage] || [];
+      const blocksToRemove = new Set<string>([id]);
+
+      // Cascade to children
+      currentBlocks.forEach(b => {
+        if (b.parentId === id) blocksToRemove.add(b.instanceId);
+      });
+
+      return {
+        ...prev,
+        [currentPage]: currentBlocks.map(b => {
+          if (blocksToRemove.has(b.instanceId)) {
+            const newLayouts = { ...(b.layouts || {}) };
+            delete newLayouts[deviceType]; // Cất vào khay
+            return { ...b, layouts: newLayouts };
+          }
+
+          // Xóa neo trỏ tới khối vừa bị cất vào khay (cho thiết bị hiện tại)
+          let changed = false;
+          const newAnchors = { ...(b.anchors || {}) } as any;
+          (['top', 'right', 'bottom', 'left']).forEach(edge => {
+            if (newAnchors[edge] && blocksToRemove.has(newAnchors[edge].target)) {
+              delete newAnchors[edge];
+              changed = true;
+            }
+          });
+
+          if (changed) {
+            return {
+              ...b,
+              anchors: Object.keys(newAnchors).length > 0 ? newAnchors : undefined,
+              layouts: {
+                ...(b.layouts || {}),
+                [deviceType]: {
+                  position: b.position,
+                  size: b.size,
+                  anchors: Object.keys(newAnchors).length > 0 ? newAnchors : undefined
+                }
+              }
+            };
+          }
+          return b;
+        })
+      };
+    });
+    if (selectedBlockId === id) setSelectedBlockId(null)
+  }, [currentPage, selectedBlockId, deviceType])
+
+  const handleDeleteBlockGlobal = useCallback((id: string) => {
+    setPageBlocks(prev => {
+      const currentBlocks = prev[currentPage] || [];
+      // Find the block and all its children (if it's a container)
+      const blocksToDelete = new Set<string>([id]);
+      currentBlocks.forEach(b => {
+        if (b.parentId === id) blocksToDelete.add(b.instanceId);
+      });
+
+      // Filter out deleted blocks
+      let newBlocks = currentBlocks.filter(b => !blocksToDelete.has(b.instanceId));
+
+      // Clean up orphaned anchors in remaining blocks
+      newBlocks = newBlocks.map(b => {
+        if (!b.anchors) return b;
         let changed = false;
-        const newAnchors = { ...(b.anchors || {}) } as any;
-        (['top', 'right', 'bottom', 'left']).forEach(edge => {
-          if (newAnchors[edge] && newAnchors[edge].target === id) {
-            delete newAnchors[edge];
+        const newAnchors = { ...b.anchors };
+        (['top', 'right', 'bottom', 'left'] as AnchorEdge[]).forEach(e => {
+          if (newAnchors[e]?.target && blocksToDelete.has(newAnchors[e]!.target as string)) {
+            delete newAnchors[e];
             changed = true;
           }
         });
-
         if (changed) {
           return {
             ...b,
             anchors: Object.keys(newAnchors).length > 0 ? newAnchors : undefined,
             layouts: {
               ...(b.layouts || {}),
-              [deviceType]: { 
-                position: b.position, 
-                size: b.size, 
-                anchors: Object.keys(newAnchors).length > 0 ? newAnchors : undefined 
+              [deviceType]: {
+                position: b.position,
+                size: b.size,
+                anchors: Object.keys(newAnchors).length > 0 ? newAnchors : undefined
               }
             }
           };
         }
         return b;
-      })
-    }))
+      });
+
+      return {
+        ...prev,
+        [currentPage]: newBlocks
+      };
+    });
     if (selectedBlockId === id) setSelectedBlockId(null)
   }, [currentPage, selectedBlockId, deviceType])
-
-  const handleDeleteBlockGlobal = useCallback((id: string) => {
-    setPageBlocks(prev => ({
-      ...prev,
-      [currentPage]: (prev[currentPage] || []).filter(b => b.instanceId !== id)
-    }))
-  }, [currentPage])
 
   const handleConfigureBlock = useCallback((instanceId: string) => {
     setSelectedBlockId(instanceId)
@@ -195,12 +370,12 @@ export default function App() {
   const handleMoveBlock = useCallback((instanceId: string, position: { x: number; y: number }) => {
     setPageBlocks(prev => ({
       ...prev,
-      [currentPage]: (prev[currentPage] || []).map(b => 
-        b.instanceId === instanceId ? { 
-          ...b, 
+      [currentPage]: (prev[currentPage] || []).map(b =>
+        b.instanceId === instanceId ? {
+          ...b,
           position,
-          layouts: { 
-            ...(b.layouts || {}), 
+          layouts: {
+            ...(b.layouts || {}),
             [deviceType]: { position, size: b.size, anchors: b.anchors ? { ...b.anchors } : undefined }
           }
         } : b
@@ -211,9 +386,9 @@ export default function App() {
   const handleResizeBlock = useCallback((id: string, size: { width: number; height: number }) => {
     setPageBlocks(prev => ({
       ...prev,
-      [currentPage]: (prev[currentPage] || []).map(b => 
-        b.instanceId === id ? { 
-          ...b, 
+      [currentPage]: (prev[currentPage] || []).map(b =>
+        b.instanceId === id ? {
+          ...b,
           size,
           layouts: {
             ...(b.layouts || {}),
@@ -228,16 +403,41 @@ export default function App() {
     }))
   }, [currentPage, deviceType])
 
-  const handleUpdateAnchors = useCallback((instanceId: string, anchors: any) => {
+  const handleUpdateBlocks = useCallback((updates: { id: string, changes: Partial<CanvasBlock> }[]) => {
+    setPageBlocks(prev => {
+      const currentBlocks = prev[currentPage] || [];
+      const updatedBlocks = currentBlocks.map(b => {
+        const update = updates.find(u => u.id === b.instanceId);
+        if (!update) return b;
+        const newBlock = { ...b, ...update.changes };
+        // Sync layouts if needed (simplified for parentId/position changes)
+        if (update.changes.position || update.changes.size || update.changes.anchors !== undefined) {
+          newBlock.layouts = {
+            ...(b.layouts || {}),
+            [deviceType]: {
+              position: newBlock.position,
+              size: newBlock.size,
+              anchors: newBlock.anchors ? { ...newBlock.anchors } : undefined
+            }
+          }
+        }
+        return newBlock;
+      });
+      return { ...prev, [currentPage]: updatedBlocks };
+    });
+  }, [currentPage, deviceType])
+
+  const handleUpdateAnchors = useCallback((instanceId: string, anchors: any, newSize?: { width: number, height: number }) => {
     setPageBlocks(prev => ({
       ...prev,
-      [currentPage]: (prev[currentPage] || []).map(b => 
-        b.instanceId === instanceId ? { 
-          ...b, 
+      [currentPage]: (prev[currentPage] || []).map(b =>
+        b.instanceId === instanceId ? {
+          ...b,
           anchors,
-          layouts: { 
-            ...(b.layouts || {}), 
-            [deviceType]: { position: b.position, size: b.size, anchors: anchors ? { ...anchors } : undefined }
+          ...(newSize ? { size: newSize } : {}),
+          layouts: {
+            ...(b.layouts || {}),
+            [deviceType]: { position: b.position, size: newSize || b.size, anchors: anchors ? { ...anchors } : undefined }
           }
         } : b
       )
@@ -301,16 +501,32 @@ export default function App() {
     }))
   }, [])
 
-  const handleUpdateDecorative = useCallback((instanceId: string, fieldKey: string, value: string) => {
+  const handleUpdateDecorative = useCallback((instanceId: string, fieldKey: string, value: any) => {
     setPageBlocks(prev => ({
       ...prev,
-      [currentPage]: (prev[currentPage] || []).map(b => 
-        b.instanceId === instanceId ? { ...b, [fieldKey]: value } : b
-      )
+      [currentPage]: (prev[currentPage] || []).map(b => {
+        if (b.instanceId === instanceId) {
+          const newBlock = { ...b, [fieldKey]: value };
+          // Tự động cắt đứt mọi dây neo khi bật/tắt chế độ Fixed (cách ly không gian)
+          if (fieldKey === "isFixed") {
+            newBlock.anchors = undefined;
+            if (newBlock.layouts) {
+              (Object.keys(newBlock.layouts) as DeviceType[]).forEach(device => {
+                if (newBlock.layouts![device]) {
+                  newBlock.layouts![device]!.anchors = undefined;
+                }
+              });
+            }
+          }
+          return newBlock;
+        }
+        return b;
+      })
     }))
   }, [currentPage])
 
   const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [isPreviewLandscape, setIsPreviewLandscape] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
 
   const handleUpdateAppConfig = useCallback((key: string, value: any) => {
@@ -321,10 +537,19 @@ export default function App() {
   // Preview Handler (No file generation)
   const handlePreview = useCallback(async () => {
     try {
+      const currentTabBlocks = pageBlocks[currentPage] || [];
+      const hasBlocksForCurrentDevice = currentTabBlocks.some(b => b.layouts && b.layouts[deviceType]);
+
+      if (!hasBlocksForCurrentDevice) {
+        alert(`Bạn chưa thiết kế Khối nào cho giao diện ${deviceType === 'mobile' ? 'Điện thoại' : 'Máy tính'}!\n\nVui lòng kéo thả ít nhất 1 Khối vào màn hình trước khi xem trước nhé.`);
+        return;
+      }
+
       const tabsPayload = pages.map(p => ({
         id: p.id,
         name: p.name,
-        blocks: pageBlocks[p.id] || []
+        blocks: (pageBlocks[p.id] || []).filter(b => b.layouts && Object.keys(b.layouts).length > 0),
+        extraHeight: pageExtraHeights[p.id] || { mobile: 0, desktop: 0 }
       }))
 
       const payload = {
@@ -347,7 +572,7 @@ export default function App() {
       } else {
         alert("Preview failed: " + JSON.stringify(data))
       }
-    } catch(err) {
+    } catch (err) {
       console.error("Preview error:", err)
       alert("Error generating preview")
     }
@@ -356,11 +581,19 @@ export default function App() {
   // Export Handler (Generates physical file)
   const handleExport = useCallback(async () => {
     try {
+      const currentTabBlocks = pageBlocks[currentPage] || [];
+      const hasBlocksForCurrentDevice = currentTabBlocks.some(b => b.layouts && b.layouts[deviceType]);
+
+      if (!hasBlocksForCurrentDevice) {
+        alert(`Bạn chưa thiết kế Khối nào cho giao diện ${deviceType === 'mobile' ? 'Điện thoại' : 'Máy tính'}!\n\nVui lòng kéo thả ít nhất 1 Khối vào màn hình trước khi xuất DApp nhé.`);
+        return;
+      }
+
       // Build tabs structure for backend
       const tabsPayload = pages.map(p => ({
         id: p.id,
         name: p.name,
-        blocks: pageBlocks[p.id] || [],
+        blocks: (pageBlocks[p.id] || []).filter(b => b.layouts && Object.keys(b.layouts).length > 0),
         extraHeight: pageExtraHeights[p.id] || { mobile: 0, desktop: 0 }
       }))
 
@@ -383,7 +616,7 @@ export default function App() {
       } else {
         alert("Export failed: " + JSON.stringify(data))
       }
-    } catch(err) {
+    } catch (err) {
       console.error("Export error:", err)
       alert("Error exporting project")
     }
@@ -399,7 +632,7 @@ export default function App() {
       <TopNavbar onExport={handleExport} onPreview={handlePreview} />
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Block Library */}
-        <BlockLibrary 
+        <BlockLibrary
           onDragStart={handleDragStart}
           pages={pages}
           currentPage={currentPage}
@@ -411,7 +644,7 @@ export default function App() {
           deviceType={deviceType}
           onDeleteGlobal={handleDeleteBlockGlobal}
         />
-        
+
         {/* Main Workspace */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Device Toggle Toolbar */}
@@ -435,7 +668,7 @@ export default function App() {
                                 anchors: block.anchors ? { ...block.anchors } : undefined
                               };
                             }
-                            
+
                             // Load new state or keep in tray
                             let targetLayout = layouts[type];
                             if (targetLayout) {
@@ -452,15 +685,15 @@ export default function App() {
                         });
                         return newPageBlocks;
                       });
-                      
+
                       setDeviceType(type);
                       setSelectedBlockId(null);
                     }
                   }}
                   className={`
                     flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all
-                    ${deviceType === type 
-                      ? "bg-primary text-primary-foreground shadow-md" 
+                    ${deviceType === type
+                      ? "bg-primary text-primary-foreground shadow-md"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                     }
                   `}
@@ -473,14 +706,17 @@ export default function App() {
           </div>
 
           {/* WYSIWYG Canvas with Device Frame */}
-          <WysiwygCanvas 
-            placedBlocks={placedBlocks}
+          <WysiwygCanvas
+            placedBlocks={(pageBlocks[currentPage] || []).filter(b => b.layouts?.[deviceType])}
             selectedBlockId={selectedBlockId}
             onSelectBlock={handleSelectBlock}
             onRemoveBlock={handleRemoveBlock}
+            onDeleteBlock={handleDeleteBlockGlobal}
+            onDuplicateBlock={handleDuplicateBlock}
             onConfigureBlock={handleConfigureBlock}
             onMoveBlock={handleMoveBlock}
             onResizeBlock={handleResizeBlock}
+            onUpdateBlocks={handleUpdateBlocks}
             onUpdateAnchors={handleUpdateAnchors}
             onDrop={handleDrop}
             deviceType={deviceType}
@@ -497,8 +733,8 @@ export default function App() {
         </div>
 
         {/* Right Sidebar - Inspector */}
-        <InspectorPanel 
-          selectedBlock={selectedBlock} 
+        <InspectorPanel
+          selectedBlock={selectedBlock}
           contractsConfig={contractsConfig}
           onUpdateContract={handleUpdateContract}
           onUpdateDecorative={handleUpdateDecorative}
@@ -517,7 +753,18 @@ export default function App() {
               Chế Độ Xem Trước (Live Preview)
             </h2>
             <div className="flex items-center gap-3">
-              <Button 
+              {deviceType === 'mobile' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsPreviewLandscape(!isPreviewLandscape)}
+                  className={`rounded-full px-4 border-white/20 text-white ${isPreviewLandscape ? 'bg-white/20' : 'bg-transparent hover:bg-white/10'}`}
+                >
+                  <MonitorSmartphone className="w-4 h-4 mr-2" />
+                  {isPreviewLandscape ? 'Xoay Dọc' : 'Xoay Ngang'}
+                </Button>
+              )}
+              <Button
                 className="animated-gradient text-white font-semibold border-0 hover:opacity-90 transition-opacity rounded-full px-6 shadow-[0_0_15px_rgba(139,92,246,0.3)]"
                 onClick={handleExport}
               >
@@ -530,10 +777,11 @@ export default function App() {
             </div>
           </div>
           {/* Content */}
-          <div className="flex-1 w-full h-full p-0">
-             <div className="relative w-full h-full bg-black overflow-hidden">
-                <iframe srcDoc={previewHtml} className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-popups allow-same-origin" />
-             </div>
+          <div className="flex-1 w-full h-full p-0 flex items-center justify-center bg-black/50">
+            <div className={`relative bg-white overflow-hidden transition-all duration-500 ease-in-out ${isPreviewLandscape ? 'w-[844px] h-[390px] rounded-[40px] shadow-2xl ring-8 ring-[#334155]' : 'w-full h-full'
+              }`}>
+              <iframe srcDoc={previewHtml} className="w-full h-full border-none bg-white" sandbox="allow-scripts allow-popups allow-same-origin" />
+            </div>
           </div>
         </div>
       )}

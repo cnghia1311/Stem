@@ -4,7 +4,11 @@
  */
 
 export const getHtmlShell = (config = {}) => {
-  const { tokenName = 'STEM', theme = 'dark', layout = 'mobile', hasMobileLayout = true } = config
+  let { tokenName = 'STEM', theme = 'dark', layout = 'mobile', hasMobileLayout = true, hasDesktopLayout = true } = config
+
+  // MÀN ẢO THUẬT 2: Nếu app CHỈ CÓ bản Desktop, ta cần báo cho JS biết để "Thu nhỏ kiểu máy ảnh" trên điện thoại
+  const hasOnlyDesktop = !hasMobileLayout && hasDesktopLayout;
+
   const maxWidth = layout === 'mobile' ? '375px' : layout === 'tablet' ? '768px' : '100%';
   const containerHeight = layout === 'mobile' ? '667px' : layout === 'tablet' ? '1024px' : '100vh';
   const frameBreakpoint = layout === 'mobile' ? '600px' : layout === 'tablet' ? '1024px' : '9999px';
@@ -22,34 +26,39 @@ export const getHtmlShell = (config = {}) => {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-html,body{overflow-x:hidden;scrollbar-width:none;-ms-overflow-style:none;}
-body::-webkit-scrollbar{display:none;}
-body{font-family:'Segoe UI',sans-serif;min-height:100vh;margin:0;padding:0;width:100%;
-${theme === 'dark'
+html,body,.app-container{overflow-x:hidden;scrollbar-width:none;-ms-overflow-style:none;}
+body::-webkit-scrollbar,.app-container::-webkit-scrollbar{display:none;}
+body{font-family:'Segoe UI',sans-serif;min-height:100vh;min-height:100dvh;margin:0;padding:0;width:100%;
+/* Neutral dark background for the viewport */
+background: #020617; color: #e2e8f0;
+}
+.app-wrapper{
+  position:relative;width:100%;max-width:100%;min-height:100vh;min-height:100dvh;margin:0;padding:0;overflow:hidden;transform-origin:top left;transform:translateZ(0);
+}
+.app-container{
+  position:absolute;top:0;left:0;right:0;bottom:0;overflow-x:hidden;overflow-y:auto;
+  /* The app theme goes to the container */
+  ${theme === 'dark'
         ? 'background:linear-gradient(135deg,#0f172a,#1e293b);color:#e2e8f0;'
         : theme === 'neon'
           ? 'background:linear-gradient(135deg,#0a0015,#1a0030);color:#e0d0ff;'
           : 'background:#f0f4f8;color:#1e293b;'
-      }}
-.app-container{
-  width:100%;
-  max-width:100%;
-  min-height:100vh;
-  margin:0;
-  padding:0;
-  position:relative;
-  overflow:hidden;
-  background: inherit;
+      }
+  container-type: inline-size;
 }
-@media (min-width: ${frameBreakpoint}) {
-  .app-container {
+@media (min-width: ${frameBreakpoint}) and (min-height: 501px) {
+  .app-wrapper {
     max-width: ${maxWidth};
     height: ${containerHeight};
     min-height: auto;
     margin: 40px auto;
     border-radius: ${layout === 'mobile' ? '40px' : '24px'};
-    border: 12px solid ${theme === 'dark' || theme === 'neon' ? '#0b1120' : '#e2e8f0'};
-    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1);
+    border: 8px solid #1e293b;
+    overflow: hidden;
+  }
+  .app-container {
+    border-radius: ${layout === 'mobile' ? '32px' : '16px'};
   }
 }
 .tab-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px;border-radius:99px;z-index:1000;max-width:90%;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;
@@ -102,11 +111,17 @@ select,input{font-family:inherit;width:100%;padding:10px;font-size:13px;border-r
 </head>
 <body>
 <div class="toast-container" id="toast-container"></div>
-<div class="app-container" id="app-root" data-design-w="${layout === 'mobile' ? 375 : 1280}" data-design-h="${layout === 'mobile' ? 667 : 800}">
+<div class="app-wrapper" id="app-wrapper" data-design-w="${layout === 'mobile' ? 375 : 1280}" data-design-h="${layout === 'mobile' ? 667 : 800}">
+  <div class="app-container" id="app-root">
 `,
 
     foot: `
-</div>
+  </div> <!-- end app-root -->
+  <!-- Fixed Layer -->
+  <div id="fixed-root" style="pointer-events: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; z-index: 50;">
+    <!-- FIXED_TABS_INJECTED_HERE -->
+  </div>
+</div> <!-- end app-wrapper -->
 <script>
 let provider,signer,userAddr;
 function toast(type,msg){
@@ -118,53 +133,88 @@ function toast(type,msg){
 // ── Universal Auto-Scaler (Desktop & Mobile) ──
 (function() {
   function autoScale() {
-    var root = document.getElementById('app-root');
-    if (!root) return;
+    var wrapper = document.getElementById('app-wrapper');
+    if (!wrapper) return;
     
     var vw = window.innerWidth;
+    var layout = '${layout}';
     var hasMobileLayout = ${hasMobileLayout ? 'true' : 'false'};
-    var isMobileView = hasMobileLayout && vw <= 600;
-    var designW = isMobileView ? 375 : 1280;
-    var minSafeWidth = isMobileView ? 320 : 1024;
+    var hasOnlyDesktop = ${hasOnlyDesktop};
+    
+    var isFramed = (layout === 'mobile' && vw >= 600) || (layout === 'tablet' && vw >= 1024);
+    
+    if (isFramed) {
+      wrapper.style.width = '';
+      wrapper.style.maxWidth = '';
+      wrapper.style.transform = '';
+      wrapper.style.transformOrigin = '';
+      wrapper.style.margin = '';
+      wrapper.style.marginBottom = '';
+      wrapper.style.minHeight = '';
+      
+      var tabs = document.querySelectorAll('.tab-content');
+      tabs.forEach(t => t.style.width = '100%');
+      document.body.style.minHeight = '100vh';
+      return;
+    }
+
+    var vw = wrapper.clientWidth || window.innerWidth;
+    var vh = window.innerHeight;
+    var designW = parseFloat(wrapper.getAttribute('data-design-w')) || 375;
+    
+    var isFramedMobile = layout === 'mobile' && window.innerWidth >= 600 && window.innerHeight > 500;
+    var isLandscapePhone = !hasOnlyDesktop && (vw > vh && vh <= 500);
+    
+    var isMobileView = isFramedMobile || isLandscapePhone || designW <= 600 || window.matchMedia('(max-width: 600px)').matches;
+    var minSafeWidth = hasOnlyDesktop ? 1280 : (isMobileView ? 320 : 1024);
+    
+    if (isFramedMobile) vw = 375;
     
     var scale, targetWidth;
-    if (vw >= designW) {
-        // Màn to hơn thiết kế: Giãn chun tối đa
+    var maxDesktopWidth = 1920;
+    var marginStyle = '0';
+
+    if (isLandscapePhone) {
+        targetWidth = '375px';
+        scale = vw / 375;
+    } else if (vw >= designW) {
         scale = 1;
-        targetWidth = '100%';
+        if (!isMobileView && vw > maxDesktopWidth) {
+            targetWidth = maxDesktopWidth + 'px';
+            marginStyle = '0 auto';
+        } else {
+            targetWidth = '100%';
+        }
     } else if (vw >= minSafeWidth) {
-        // Màn hơi hẹp: Co dây chun, khối giữ nguyên
         scale = 1;
         targetWidth = '100%';
     } else {
-        // Màn quá hẹp: Thu nhỏ khối để tránh đụng xe
         scale = vw / minSafeWidth;
         targetWidth = minSafeWidth + 'px';
     }
     
-    root.style.width = targetWidth;
-    root.style.maxWidth = 'none';
-    root.style.transform = scale < 1 ? 'scale(' + scale + ')' : 'none';
-    root.style.transformOrigin = 'top left';
-    root.style.margin = '0'; 
+    wrapper.style.width = targetWidth;
+    wrapper.style.maxWidth = 'none';
+    wrapper.style.transform = scale !== 1 ? 'scale(' + scale + ')' : 'none';
+    wrapper.style.transformOrigin = 'top left';
+    wrapper.style.margin = marginStyle; 
     
-    var designH = parseFloat(getComputedStyle(root).getPropertyValue('--design-h')) || (isMobileView ? 667 : 800);
+    var designH = parseFloat(wrapper.getAttribute('data-design-h')) || (isMobileView ? 667 : 800);
+    var containerH = wrapper.parentElement.clientHeight || window.innerHeight;
+    var scaledH = Math.max(designH, containerH / scale);
     
-    root.style.minHeight = designH + 'px';
-    if (scale < 1) {
-        root.style.marginBottom = -(designH - designH * scale) + 'px';
+    if (scale !== 1) {
+        wrapper.style.minHeight = scaledH + 'px';
+        wrapper.style.marginBottom = -(scaledH - scaledH * scale) + 'px';
     } else {
-        root.style.marginBottom = '0px';
+        wrapper.style.minHeight = Math.max(designH, containerH) + 'px';
     }
     
-    var tabs = root.querySelectorAll('.tab-content');
+    var tabs = document.querySelectorAll('.tab-content');
     tabs.forEach(t => {
       t.style.width = targetWidth;
-      t.style.minHeight = designH + 'px';
-      t.style.overflow = 'visible';
+      // Let app-container scroll normally
     });
-    
-    document.body.style.minHeight = (designH * scale) + 'px';
   }
   window.addEventListener('resize', autoScale);
   autoScale();

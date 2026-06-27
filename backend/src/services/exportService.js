@@ -7,6 +7,7 @@ import { slugify } from '../utils/helpers.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import os from 'os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -66,8 +67,26 @@ const saveHtmlFromData = async (reqBody, userInfo = null) => {
     }
   }
 
+  // Lấy IP mạng LAN của máy tính
+  const interfaces = os.networkInterfaces()
+  let localIp = 'localhost'
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name]) {
+      // Bỏ qua địa chỉ nội bộ và chỉ lấy IPv4
+      if (net.family === 'IPv4' && !net.internal) {
+        localIp = net.address
+        break
+      }
+    }
+    if (localIp !== 'localhost') break
+  }
+
+  // Cổng của backend (mặc định 3001)
+  const port = process.env.PORT || 3001
+  const fullUrl = `http://${localIp}:${port}/apps/${safeName}`
+
   return {
-    url: '/apps/' + safeName,
+    url: fullUrl,
     filename: safeName,
     title: appTitle
   }
