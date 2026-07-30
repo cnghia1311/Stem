@@ -64,9 +64,25 @@ const logout = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const sendOtp = async (req, res, next) => {
+  try {
+    const result = await authService.sendOtp(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
+const verifyOtp = async (req, res, next) => {
+  try {
+    const result = await authService.verifyOtp(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 export const authController = {
   register,
   login,
   refreshToken,
-  logout
+  logout,
+  sendOtp,
+  verifyOtp
 }

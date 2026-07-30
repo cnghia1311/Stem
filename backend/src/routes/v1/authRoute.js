@@ -21,4 +21,11 @@ Router.route('/refresh-token')
 Router.route('/logout')
   .delete(authMiddleware.isAuthorized, authController.logout)
 
+// POST /api/v1/auth/send-otp
+Router.route('/send-otp')
+  .post(authValidation.sendOtp, authController.sendOtp)
+  
+// POST /api/v1/auth/verify-otp
+Router.route('/verify-otp')
+  .post(authValidation.verifyOtp, authController.verifyOtp)
 export const authRoute = Router

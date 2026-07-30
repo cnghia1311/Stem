@@ -8,7 +8,7 @@ import { corsOptions } from './config/cors.js'
 import { APIs_V1 } from './routes/v1/index.js'
 import { errorHandlingMiddleware } from './middlewares/errorHandling.js'
 import { blockCache } from './engine/blockCache.js'
-
+import { otpModel } from './models/otpModel.js'
 const START_SERVER = () => {
   const app = express()
 
@@ -51,6 +51,7 @@ console.log('🔌 Connecting to MongoDB...')
 CONNECT_DB()
   .then(async () => {
     console.log('✅ Connected to MongoDB successfully!')
+    await otpModel.ensureIndexes()
     console.log('')
 
     // Load block cache từ data/blocks/

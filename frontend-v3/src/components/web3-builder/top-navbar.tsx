@@ -1,9 +1,9 @@
 "use client"
 
-import { Eye, Rocket, Blocks } from "lucide-react"
+import { Eye, Rocket, Blocks, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function TopNavbar({ onExport, onPreview }: { onExport?: () => void, onPreview?: () => void }) {
+export function TopNavbar({ onExport, onPreview, onLogout }: { onExport?: () => void, onPreview?: () => void, onLogout?: () => void }) {
   return (
     <header className="h-14 flex items-center justify-between px-4 border-b border-border bg-background/80 backdrop-blur-sm">
       {/* Logo */}
@@ -32,6 +32,14 @@ export function TopNavbar({ onExport, onPreview }: { onExport?: () => void, onPr
         >
           <Rocket className="w-4 h-4 mr-2" />
           Export DApp
+        </Button>
+        <Button
+          variant="outline"
+          className="border border-border text-muted-foreground hover:text-foreground"
+          onClick={onLogout}
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Logout
         </Button>
       </div>
     </header>
