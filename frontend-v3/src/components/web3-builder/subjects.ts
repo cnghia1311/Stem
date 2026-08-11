@@ -1,6 +1,6 @@
 export const LESSONS = [
     { id: "web3-bank", name: "🏛️ Bài 1: Hệ Thống Tiền Tệ Web3", blocks: ["wallet", "qr-wallet", "erc20-factory", "balance", "transfer", "wrap-eth"] },
-    { id: "nft-gacha", name: "🎰 Bài 2: Máy Quay Thưởng NFT", blocks: ["wallet", "mint-erc721-random"] },
+    { id: "nft-gacha", name: "🎰 Bài 2: Máy Quay Thưởng NFT", blocks: ["wallet", "erc721-factory", "update-erc721", "grant-minter-721", "mint-erc721-random"] },
     { id: "market-trade", name: "🛒 Bài 3: Chợ Giao Dịch Vật Phẩm", blocks: ["wallet", "balance", "market-list", "market-cancel", "market-shop"] },
     { id: "soulbound-cert", name: "🎓 Bài 4: Hồ Sơ Danh Tính (SBT)", blocks: ["wallet", "profile-gallery", "admin-revoke"] },
     { id: "dex-exchange", name: "🦄 Bài 5: Sàn Phân Quyền (DEX)", blocks: ["wallet", "gecko-chart", "gecko-txns", "uniswap-v3-sell", "uniswap-v3-lp"] },

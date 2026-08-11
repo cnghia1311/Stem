@@ -80,6 +80,7 @@ class BlockCache {
         required: b.required || false,
         multiToken: b.multiToken || false,
         contractKey: b.contractKey || null,
+        contractFields: b.contractFields || null,
         config: b.config || null,
         html,
         minHeight: Math.max(minHeight, 130)   // never smaller than 130px

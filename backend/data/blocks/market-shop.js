@@ -24,13 +24,36 @@ export default {
             <div style="text-align:center;grid-column:1/-1;color:#64748b;font-size:12px;padding:20px;">Dán Mã Marketplace rồi bấm "Tải Hàng" để xem mặt hàng...</div>
         </div>
     </div>`,
-    engineCode: (pfx) => `
+        engineCode: (pfx) => `
     const NATIVE_TOKEN_SHOP = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
     const MINI_MP_SHOP_ABI = [
         "function listings(uint256) view returns (uint256 listingId, address seller, address assetContract, uint256 tokenId, address currency, uint256 price, bool isActive)",
         "function getTotalListings() view returns (uint256)",
         "function buyListing(uint256 _listingId) payable"
     ];
+
+    const _mshopCurrencyCache = {};
+
+    // Cache theo địa chỉ tiền tệ: nhiều đơn hàng dùng chung 1 loại coin thì chỉ hỏi RPC 1 lần
+    async function __mshopCurrencyInfo(currencyAddr) {
+        const key = (currencyAddr || '').toLowerCase();
+        if(_mshopCurrencyCache[key]) return _mshopCurrencyCache[key];
+
+        let info = { decimals: 18, symbol: 'ETH' };
+        if(key !== NATIVE_TOKEN_SHOP) {
+            info = { decimals: 18, symbol: currencyAddr.slice(0,6) + '...' + currencyAddr.slice(-4) };
+            try {
+                const erc20 = new ethers.Contract(currencyAddr, [
+                    "function decimals() view returns (uint8)",
+                    "function symbol() view returns (string)"
+                ], signer);
+                try { info.decimals = await erc20.decimals(); } catch(e) {}
+                try { info.symbol = await erc20.symbol(); } catch(e) {}
+            } catch(e) {}
+        }
+        _mshopCurrencyCache[key] = info;
+        return info;
+    }
 
     async function loadShop() {
         if(!signer){toast('error','Kết nối Ví trước!');return;}
@@ -76,9 +99,10 @@ export default {
 
             grid.innerHTML = '';
             for(const item of activeItems) {
-                const priceStr = ethers.utils.formatEther(item.price);
+                const curInfo = await __mshopCurrencyInfo(item.currency);
+                const priceStr = ethers.utils.formatUnits(item.price, curInfo.decimals);
                 const isNative = item.currency.toLowerCase() === NATIVE_TOKEN_SHOP;
-                const currLabel = isNative ? 'ETH' : item.currency.slice(0,6) + '...' + item.currency.slice(-4);
+                const currLabel = curInfo.symbol;
 
                 // Lấy metadata NFT (ảnh + tên)
                 let imgUrl = ''; let name = 'NFT #' + item.tokenId;

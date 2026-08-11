@@ -44,9 +44,9 @@ export default {
         <select id="tf-select" style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:rgba(0,0,0,0.3);color:inherit;font-size:13px;margin-bottom:8px;cursor:pointer;">
             ${fullOptions}
         </select>
-        <div id="tf-custom-group" style="display:none;gap:6px;margin-bottom:8px;">
-            <input id="tf-custom-contract" type="text" placeholder="Dán địa chỉ (0x...)" style="flex:1;padding:10px;border-radius:8px;border:1px dashed #8b5cf6;background:#0f172a;color:#a5b4fc;font-size:12px;outline:none;">
-            <button id="tf-add-btn" style="padding:10px 15px;border-radius:8px;border:none;background:#8b5cf6;color:white;font-weight:bold;cursor:pointer;">Lưu</button>
+        <div id="tf-custom-group" style="display:flex;gap:6px;margin-bottom:8px;">
+            <input id="tf-custom-contract" type="text" placeholder="Dán địa chỉ Contract (0x...)" style="flex:1;min-width:0;width:auto;padding:10px;border-radius:8px;border:1px dashed #8b5cf6;background:#0f172a;color:#a5b4fc;font-size:12px;outline:none;">
+            <button id="tf-add-btn" style="width:auto;flex:0 0 auto;padding:10px 15px;border-radius:8px;border:none;background:#8b5cf6;color:white;font-weight:bold;cursor:pointer;font-size:13px;">Lưu</button>
         </div>
         
         <!-- GALLERY CONTAINER -->
@@ -66,8 +66,8 @@ export default {
 
         <!-- TO ADDRESS -->
         <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <input id="tf-address" type="text" placeholder="Địa chỉ ví người nhận (0x...)" style="flex:1;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
-            <button id="tf-scan-btn" style="padding:10px 12px;border-radius:8px;border:none;background:#334155;color:#38bdf8;cursor:pointer;font-size:18px;" title="Quét mã QR">📷</button>
+            <input id="tf-address" type="text" placeholder="Địa chỉ ví người nhận (0x...)" style="flex:1;min-width:0;width:auto;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
+            <button id="tf-scan-btn" style="width:auto;flex:0 0 auto;padding:10px 12px;border-radius:8px;border:none;background:#334155;color:#38bdf8;cursor:pointer;font-size:18px;line-height:1;" title="Quét mã QR">📷</button>
         </div>
         
         <!-- SCANNER CONTAINER -->
@@ -223,15 +223,15 @@ export default {
             const currentType = typeInp.value;
             sel.innerHTML = '';
             if (savedOptions[currentType].length === 0) {
-                sel.innerHTML += '<option value="">-- Chưa có Contract --</option>';
+                sel.innerHTML += '<option value="">-- Chưa có Contract (dán ở ô dưới) --</option>';
             } else {
                 savedOptions[currentType].forEach(opt => {
                     sel.innerHTML += '<option value="'+opt.val+'">'+opt.text+'</option>';
                 });
             }
-            sel.innerHTML += '<option value="custom">➕ Thêm Contract lạ...</option>';
-            // Reset custom group state
-            custGroup.style.display = 'none';
+            sel.innerHTML += '<option value="custom">➕ Nhập Contract lạ...</option>';
+            // Ô nhập contract giờ LUÔN hiện, không ẩn nữa
+            custGroup.style.display = 'flex';
         }
         
         function setTab(type) {
@@ -256,10 +256,16 @@ export default {
         t721.onclick = () => setTab('erc721');
         t1155.onclick = () => setTab('erc1155');
         
+        function getContractAddr() {
+            const v = sel.value;
+            if (v && v !== 'custom' && v.length === 42) return v;
+            return (cust.value || '').trim();
+        }
+            
         async function updateBalance() {
             if(!signer) { balDisp.style.display = 'none'; return; }
             const currentType = typeInp.value;
-            const contractAddr = sel.value === 'custom' ? cust.value.trim() : sel.value;
+            const contractAddr = getContractAddr();
             const tId = idInp.value.trim();
             
             if(!contractAddr || contractAddr.length !== 42) { balDisp.style.display = 'none'; return; }
@@ -309,10 +315,12 @@ export default {
         }
         
         sel.onchange = () => {
-            if(sel.value === 'custom') { custGroup.style.display = 'flex'; }
-            else { custGroup.style.display = 'none'; updateBalance(); }
+            custGroup.style.display = 'flex';
+            if (sel.value && sel.value !== 'custom') cust.value = '';
+            updateBalance();
         };
         
+        cust.addEventListener('input', updateBalance);
         idInp.addEventListener('input', updateBalance);
         
         if(galBtn) {
@@ -462,10 +470,11 @@ export default {
         const idInp = document.getElementById(prefix+'tf-token-id');
         
         let contractAddr = sel.value;
-        if(contractAddr === 'custom') {
-            toast('error','Vui lòng dán địa chỉ và bấm Lưu trước!');
-            return;
+        if(contractAddr === 'custom' || !contractAddr || contractAddr.length !== 42) {
+            const custEl = document.getElementById(prefix+'tf-custom-contract');
+            contractAddr = custEl ? custEl.value.trim() : '';
         }
+        if(!contractAddr||contractAddr.length!==42){toast('error','Chưa nhập địa chỉ Contract hợp lệ!');return;}
         
         if(!contractAddr||contractAddr.length!==42){toast('error','Địa chỉ Contract không hợp lệ!');return;}
         const toAddr=ai.value.trim();

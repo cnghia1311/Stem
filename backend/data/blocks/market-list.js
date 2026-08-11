@@ -42,7 +42,7 @@ export default {
             <button id="mlist-withdraw-btn" style="background:linear-gradient(45deg, #d97706, #fbbf24);width:100%;padding:12px;border-radius:10px;border:none;color:#0f172a;font-weight:bold;font-size:13px;cursor:pointer;">💰 RÚT TIỀN KÉT SẮT</button>
         </div>
     </div>`,
-    engineCode: (pfx) => `
+        engineCode: (pfx) => `
     const MINI_MP_LIST_ABI = [
         "function createListing(address _assetContract, uint256 _tokenId, address _currency, uint256 _price) external returns (uint256)",
         "function withdrawFunds(address _currency) external",
@@ -50,6 +50,31 @@ export default {
         "event ListingCreated(uint256 indexed listingId, address indexed seller, address assetContract, uint256 tokenId, address currency, uint256 price)"
     ];
 
+    const NATIVE_TOKEN_LIST = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    const _mlistCurrencyCache = {};
+
+    // Đọc decimals + symbol thật của loại tiền tệ.
+    // ETH gốc = 18 decimals. USDC = 6, WBTC = 8... nên KHÔNG được mặc định 18 cho mọi token.
+    async function __mlistCurrencyInfo(currencyAddr) {
+        const key = (currencyAddr || '').toLowerCase();
+        if(_mlistCurrencyCache[key]) return _mlistCurrencyCache[key];
+
+        let info = { decimals: 18, symbol: 'ETH' };
+        if(key !== NATIVE_TOKEN_LIST) {
+            info = { decimals: 18, symbol: 'Token' };
+            try {
+                const erc20 = new ethers.Contract(currencyAddr, [
+                    "function decimals() view returns (uint8)",
+                    "function symbol() view returns (string)"
+                ], provider);
+                try { info.decimals = await erc20.decimals(); } catch(e) {}
+                try { info.symbol = await erc20.symbol(); } catch(e) {}
+            } catch(e) {}
+        }
+        _mlistCurrencyCache[key] = info;
+        return info;
+    }
+    
     async function listNFT() {
         if(!signer){toast('error','Kết nối Ví trước!');return;}
         const mpAddr = document.getElementById('mlist-marketplace').value.trim();
@@ -63,6 +88,7 @@ export default {
         if(!nftAddr || nftAddr.length !== 42) { toast('error','Nhập Mã Hợp Đồng NFT hợp lệ!'); return; }
         if(tokenId === '') { toast('error','Nhập Token ID!'); return; }
         if(!price || isNaN(price)) { toast('error','Nhập Giá Bán hợp lệ!'); return; }
+        if(!currency || currency.length !== 42) { toast('error','Ô Tiền tệ không hợp lệ! Để mặc định 0xEee... nếu bán lấy ETH.'); return; }
         try {
             btn.disabled = true; result.style.display = 'none';
 
@@ -96,7 +122,8 @@ export default {
             // Bước 2: Ký gửi NFT vào Marketplace (Escrow)
             btn.innerText = '📦 BƯỚC 2: GỬI VÀO MARKETPLACE...'; toast('info', 'Đang gửi NFT vào kho Marketplace...');
             const mp = new ethers.Contract(mpAddr, MINI_MP_LIST_ABI, signer);
-            const priceWei = ethers.utils.parseEther(price);
+            const curInfo = await __mlistCurrencyInfo(currency);
+            const priceWei = ethers.utils.parseUnits(price, curInfo.decimals);
             const txList = await mp.createListing(nftAddr, tokenId, currency, priceWei);
             toast('info', 'Đang đợi Blockchain xác nhận...');
             const receipt = await txList.wait();
@@ -134,14 +161,13 @@ export default {
         try {
             display.innerHTML = '<span style="color:#94a3b8;">⏳ Đang kiểm tra...</span>';
             const mp = new ethers.Contract(mpAddr, MINI_MP_LIST_ABI, provider);
+            const curInfo = await __mlistCurrencyInfo(currency);
             const bal = await mp.balances(userAddr, currency);
-            const balStr = ethers.utils.formatEther(bal);
-            const isNative = currency.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-            const label = isNative ? 'ETH' : 'Token';
+            const balStr = ethers.utils.formatUnits(bal, curInfo.decimals);
             if(bal.gt(0)) {
-                display.innerHTML = '💰 Số dư: <strong>' + balStr + ' ' + label + '</strong>';
+                display.innerHTML = '💰 Số dư: <strong>' + balStr + ' ' + curInfo.symbol + '</strong>';
             } else {
-                display.innerHTML = '<span style="color:#64748b;">Két sắt trống (0 ' + label + ')</span>';
+                display.innerHTML = '<span style="color:#64748b;">Két sắt trống (0 ' + curInfo.symbol + ')</span>';
             }
         } catch(e) {
             display.innerHTML = '<span style="color:#ef4444;">Lỗi kiểm tra</span>';

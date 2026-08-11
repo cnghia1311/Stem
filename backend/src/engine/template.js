@@ -94,9 +94,17 @@ ${theme === 'dark'
           ? 'background:rgba(20,0,50,0.6);border:1px solid rgba(139,92,246,0.3);'
           : 'background:#ffffff;border:1px solid #e2e8f0;'
       }
-border-radius:16px;padding:20px;border-left:4px solid;position:absolute;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;overflow:hidden;}
+border-radius:16px;padding:20px;border-left:4px solid;position:absolute;width:100%;height:100%;display:flex;flex-direction:column;justify-content:safe center;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#475569 transparent;}
 .khoi>*{flex-shrink:0;}
+.khoi::-webkit-scrollbar{width:6px;}
+.khoi::-webkit-scrollbar-track{background:transparent;}
+.khoi::-webkit-scrollbar-thumb{background:#475569;border-radius:3px;}
+.khoi::-webkit-scrollbar-thumb:hover{background:#64748b;}
 .khoi-title{font-size:15px;font-weight:700;margin-bottom:12px;}
+select,input{font-family:inherit;width:100%;padding:10px;font-size:13px;border-radius:8px;}
+div[style*="display:flex"]:not([style*="column"])>button{width:auto;flex:0 0 auto;}
+div[style*="display:flex"]:not([style*="column"])>input,
+div[style*="display:flex"]:not([style*="column"])>select{min-width:0;}
 .khoi p{font-size:13px;margin-bottom:10px;}
 button{width:100%;padding:12px;border:none;border-radius:10px;color:#fff;font-weight:600;cursor:pointer;font-size:14px;transition:all .2s;}
 button:hover{opacity:0.9;transform:translateY(-1px);}

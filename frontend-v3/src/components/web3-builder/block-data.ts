@@ -31,7 +31,7 @@ export interface Block {
   description: string
   blockType: BlockType
   defaultSize: { width: number; height: number }
-  contractFields?: { key: string; label: string; placeholder: string; type?: string }[]
+  contractFields?: { key: string; label: string; placeholder?: string; type?: string; options?: { label: string; value: string }[] }[]
   uiFields?: { key: string; label: string; type: string; options?: {label: string, value: string}[] }[]
 }
 

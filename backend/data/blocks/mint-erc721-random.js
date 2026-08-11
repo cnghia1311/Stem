@@ -18,8 +18,8 @@ export default {
         <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:15px;margin-bottom:12px;">
             <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:6px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">Địa chỉ Bộ Sưu Tập NFT (Giáo viên cấp)</label>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-                <input type="text" id="gc-collection" placeholder="0x... (ERC-721)" style="flex:1;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
-                <button id="gc-load-btn" style="padding:10px 14px;border-radius:8px;border:1px solid #f59e0b44;background:#1e293b;color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Tải</button>
+                <input type="text" id="gc-collection" placeholder="0x... (ERC-721)" style="flex:1;min-width:0;width:auto;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
+                <button id="gc-load-btn" style="width:auto;flex:0 0 auto;padding:10px 14px;border-radius:8px;border:1px solid #f59e0b44;background:#1e293b;color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 Tải</button>
             </div>
             <div id="gc-load-status" style="font-size:11px;color:#64748b;">💡 Nhập địa chỉ rồi bấm 🔄 Tải để xem danh sách vật phẩm.</div>
         </div>

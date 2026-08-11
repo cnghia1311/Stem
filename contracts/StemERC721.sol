@@ -125,6 +125,50 @@ contract StemERC721 is
         emit TemplateSet(templateId, uri, weight);
     }
 
+    /// @notice Thêm hoặc cập nhật NHIỀU mẫu NFT trong một giao dịch duy nhất
+    /// @dev Chỉ thêm hàm, KHÔNG thêm biến storage → an toàn tuyệt đối cho Beacon upgrade
+    /// @param ids      Danh sách templateId
+    /// @param uris     Danh sách IPFS URI, cùng thứ tự với ids
+    /// @param weights  Danh sách trọng số gacha, cùng thứ tự với ids
+    function setTemplateBatch(
+        uint256[] calldata ids,
+        string[] calldata uris,
+        uint256[] calldata weights
+    ) external {
+        require(
+            owner() == msg.sender || _templateCreators[msg.sender],
+            "StemERC721: Not authorized"
+        );
+        require(
+            ids.length == uris.length && ids.length == weights.length,
+            "StemERC721: Array length mismatch"
+        );
+        require(ids.length > 0, "StemERC721: Empty batch");
+        require(ids.length <= 50, "StemERC721: Batch too large");
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint256 templateId = ids[i];
+            uint256 weight = weights[i];
+
+            require(bytes(uris[i]).length > 0, "StemERC721: URI cannot be empty");
+            require(weight > 0, "StemERC721: Weight must be greater than 0");
+
+            bool isNew = bytes(templateURIs[templateId]).length == 0;
+
+            if (isNew) {
+                templateIds.push(templateId);
+                totalWeight += weight;
+            } else {
+                totalWeight = totalWeight - templateWeights[templateId] + weight;
+            }
+
+            templateURIs[templateId] = uris[i];
+            templateWeights[templateId] = weight;
+
+            emit TemplateSet(templateId, uris[i], weight);
+        }
+    }
+
     /// @notice Lấy toàn bộ danh sách templateId của collection này
     function getTemplateIds() public view returns (uint256[] memory) {
         return templateIds;

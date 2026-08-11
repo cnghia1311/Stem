@@ -135,6 +135,7 @@ export default {
                     document.getElementById('nf-result-address').innerText = collectionAddr;
                     document.getElementById('nf-result-link').href = scanBase + collectionAddr;
                     _nfResult.style.display = 'block';
+                    setTimeout(function(){ _nfResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
 
                     _nfStatus.innerHTML = '<span style="color:#10b981;">✅ Hoàn tất! Bộ sưu tập <strong>' + colSymbol + '</strong> đã sẵn sàng!</span>';
                     toast('success', '🎉 Đã tạo thành công bộ sưu tập ' + colSymbol + '!');
