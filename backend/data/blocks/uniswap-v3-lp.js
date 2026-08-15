@@ -58,6 +58,15 @@ export default {
         <div id="lp-info" style="background:rgba(6,182,212,0.08);border:1px solid #334155;border-radius:10px;padding:12px;margin-bottom:15px;text-align:center;font-size:12px;color:#94a3b8;">
             💧 Thanh khoản Full Range — Bao phủ toàn bộ khoảng giá
         </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:15px;">
+            <label style="font-size:12px;color:#94a3b8;font-weight:bold;flex:0 0 auto;">🛡️ Trượt giá tối đa</label>
+            <select id="lp-slippage" style="flex:1;min-width:0;width:auto;padding:8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
+                <option value="50">0.5% — chặt</option>
+                <option value="100" selected>1% — khuyên dùng</option>
+                <option value="300">3% — pool biến động</option>
+                <option value="500">5% — lỏng</option>
+            </select>
+        </div>       
         <button id="lp-add-btn" style="background:linear-gradient(45deg,#06b6d4,#0891b2);width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer;color:white;transition:all 0.2s;box-shadow:0 4px 15px rgba(6,182,212,0.3);">💧 THÊM THANH KHOẢN</button>
         <div id="lp-status" style="margin-top:15px;font-size:12px;text-align:center;color:#94a3b8;min-height:20px;"></div>
     </div>`,
@@ -286,25 +295,41 @@ export default {
                         _stt.innerHTML = '<span style=\"color:#10b981;\">✅ Pool đã được tạo!</span>';
                     }
 
-                    // Approve Token A
-                    _stt.innerText = 'Xin quyền chuyển Token A (Approve)... (1/3)';
-                    var txAp1 = await cA.approve(pmAddr, ethers.constants.MaxUint256);
-                    await txAp1.wait();
+                    // ---- Ủy quyền: chỉ approve khi allowance thực sự thiếu ----
+                    // Đổi thành true nếu muốn ủy quyền vô hạn (đỡ ký lại, kém an toàn hơn)
+                    var LP_INFINITE_APPROVE = false;
 
-                    // Approve Token B
-                    _stt.innerText = 'Xin quyền chuyển Token B (Approve)... (2/3)';
-                    var txAp2 = await cB.approve(pmAddr, ethers.constants.MaxUint256);
-                    await txAp2.wait();
+                    async function _lpEnsureAllowance(c, spender, needed, label, step) {
+                        var cur = await c.allowance(userAddr, spender);
+                        if (cur.gte(needed)) {
+                            _stt.innerHTML = '<span style="color:#10b981;">✅ ' + label + ' đã ủy quyền sẵn — bỏ qua (' + step + ')</span>';
+                            return;
+                        }
+                        _stt.innerText = 'Xin quyền chuyển ' + label + ' (Approve)... (' + step + ')';
+                        var amt = LP_INFINITE_APPROVE ? ethers.constants.MaxUint256 : needed;
+                        var txAp = await c.approve(spender, amt);
+                        await txAp.wait();
+                    }
 
-                    // Mint position (Full Range)
-                    _stt.innerHTML = '<span style=\"color:#3b82f6;\">Chờ ký giao dịch Thêm Thanh Khoản... (3/3)</span>';
+                    await _lpEnsureAllowance(cA, pmAddr, amtA, 'Token A', '1/3');
+                    await _lpEnsureAllowance(cB, pmAddr, amtB, 'Token B', '2/3');
+
+                    // ---- Mint position (Full Range) ----
+                    _stt.innerHTML = '<span style="color:#3b82f6;">Chờ ký giao dịch Thêm Thanh Khoản... (3/3)</span>';
                     var ticks = fullRangeTicks(fee);
                     var deadline = Math.floor(Date.now() / 1000) + 600;
+
+                    // Bảo vệ trượt giá: giá pool có thể nhích trong lúc bạn ký.
+                    // Nếu số token thực sự bị lấy đi ít hơn mức tối thiểu này, giao dịch tự huỷ.
+                    var _slipBps = parseInt(_cont.querySelector('#lp-slippage').value) || 100;
+                    var min0 = amount0.mul(10000 - _slipBps).div(10000);
+                    var min1 = amount1.mul(10000 - _slipBps).div(10000);
+
                     var mintParams = {
                         token0: token0, token1: token1, fee: fee,
                         tickLower: ticks.lower, tickUpper: ticks.upper,
                         amount0Desired: amount0, amount1Desired: amount1,
-                        amount0Min: 0, amount1Min: 0,
+                        amount0Min: min0, amount1Min: min1,
                         recipient: userAddr, deadline: deadline
                     };
                     var txMint = await pm.mint(mintParams);
