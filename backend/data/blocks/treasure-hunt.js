@@ -207,9 +207,14 @@ export default {
                                 window.history.replaceState(null, '', newUrl.toString());
                             } catch(e){}
 
-                            // Hiệu ứng ăn mừng
-                            document.querySelector('#treasure-hunt .khoi').style.borderColor = '#10b981';
-                            document.querySelector('#treasure-hunt .khoi').style.boxShadow = '0 0 30px rgba(16,185,129,0.3)';
+                            // Hiệu ứng ăn mừng — bám theo chính khối này thay vì tìm id không tồn tại
+                            try {
+                                var thBox = thStartBtn.closest('.khoi');
+                                if (thBox) {
+                                    thBox.style.borderColor = '#10b981';
+                                    thBox.style.boxShadow = '0 0 30px rgba(16,185,129,0.3)';
+                                }
+                            } catch(e) {}
                         } else {
                             // ĐANG TÌM
                             if(mode === 'radar') {

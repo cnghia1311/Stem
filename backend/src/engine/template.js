@@ -132,6 +132,33 @@ select,input{font-family:inherit;width:100%;padding:10px;font-size:13px;border-r
 </div> <!-- end app-wrapper -->
 <script>
 let provider,signer,userAddr;
+// Trình duyệt chỉ cấp navigator.clipboard khi chạy HTTPS hoặc localhost.
+// Mở app qua IP LAN (http://192.168.x.x) sẽ không có -> tự vá bằng cách cũ.
+(function(){
+  if (navigator.clipboard && navigator.clipboard.writeText) return;
+  var fallback = {
+    writeText: function(text){
+      return new Promise(function(resolve, reject){
+        try{
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly','');
+          ta.style.position = 'fixed';
+          ta.style.top = '-9999px';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, ta.value.length);
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) resolve(); else reject(new Error('copy failed'));
+        }catch(e){ reject(e); }
+      });
+    }
+  };
+  try { navigator.clipboard = fallback; }
+  catch(e) { try { Object.defineProperty(navigator, 'clipboard', { value: fallback, configurable: true }); } catch(e2){} }
+})();
 function toast(type,msg){
   const c=document.getElementById('toast-container');
   const d=document.createElement('div');d.className='toast '+type;d.textContent=msg;

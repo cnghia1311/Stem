@@ -46,6 +46,25 @@ export default {
             </div>
         </div>
 
+        <!-- NẠP COIN VÀO KÉT -->
+        <div style="margin-top:16px;background:#0f172a;border:1px solid #f59e0b;border-radius:12px;padding:15px;">
+            <div style="font-size:13px;color:#fcd34d;font-weight:bold;margin-bottom:10px;text-align:center;">💰 NẠP COIN VÀO KÉT SẮT</div>
+
+            <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px;font-weight:bold;">Địa chỉ Két Sắt cần nạp</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="text" id="cff-fund-addr" placeholder="0x... (tự điền sau khi đúc két)" style="flex:1;min-width:0;width:auto;padding:8px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:12px;outline:none;font-family:monospace;">
+                <button id="cff-fund-check" style="width:auto;flex:0 0 auto;padding:8px 12px;border-radius:6px;border:1px solid #f59e0b;background:transparent;color:#fcd34d;font-size:11px;font-weight:bold;cursor:pointer;white-space:nowrap;">🔍 Kiểm tra</button>
+            </div>
+
+            <div id="cff-fund-info" style="display:none;background:#1e293b;padding:10px;border-radius:8px;margin-bottom:8px;font-size:11px;line-height:1.7;"></div>
+
+            <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px;font-weight:bold;">Số lượng Coin muốn nạp</label>
+            <input type="text" id="cff-fund-amount" placeholder="VD: 1000" style="width:100%;padding:10px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:14px;outline:none;font-weight:bold;margin-bottom:10px;">
+
+            <button id="cff-fund-btn" style="width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:14px;font-weight:800;cursor:pointer;">💰 NẠP COIN VÀO KÉT</button>
+            <div id="cff-fund-status" style="margin-top:8px;font-size:11px;text-align:center;color:#94a3b8;min-height:16px;"></div>
+        </div>
+        
         <div style="margin-top:20px;border-top:1px dashed #334155;padding-top:15px;">
             <div style="font-size:12px;color:#a5b4fc;font-weight:bold;margin-bottom:8px;text-align:center;">🛠️ QUẢN LÝ KÉT SẮT CŨ</div>
             <button id="cff-load-history-btn" style="width:100%;padding:8px;border-radius:8px;border:1px solid #3b82f6;background:transparent;color:#3b82f6;font-size:12px;font-weight:bold;cursor:pointer;margin-bottom:8px;">🔄 XEM LỊCH SỬ KÉT SẮT</button>
@@ -77,7 +96,127 @@ export default {
         var _cffAddr = document.getElementById('cff-result-addr');
         var _cffWithdrawBtn = document.getElementById('cff-withdraw-btn');
         var currentFaucetAddr = "";
+        const FAUCET_INFO_ABI = [
+            "function token() view returns (address)",
+            "function rewardAmount() view returns (uint256)",
+            "function owner() view returns (address)"
+        ];
+        const ERC20_FUND_ABI = [
+            "function transfer(address to, uint256 amount) returns (bool)",
+            "function balanceOf(address) view returns (uint256)",
+            "function decimals() view returns (uint8)",
+            "function symbol() view returns (string)"
+        ];
 
+        var _cffFundAddr   = document.getElementById('cff-fund-addr');
+        var _cffFundCheck  = document.getElementById('cff-fund-check');
+        var _cffFundInfo   = document.getElementById('cff-fund-info');
+        var _cffFundAmount = document.getElementById('cff-fund-amount');
+        var _cffFundBtn    = document.getElementById('cff-fund-btn');
+        var _cffFundStatus = document.getElementById('cff-fund-status');
+
+        function _cffProvider() {
+            if (provider) return provider;
+            if (window.ethereum) return new ethers.providers.Web3Provider(window.ethereum);
+            return null;
+        }
+
+        // Đọc két: số dư còn lại, mức thưởng, còn đủ trả cho bao nhiêu em
+        async function _cffCheckFaucet() {
+            if (!_cffFundAddr) return null;
+            var addr = _cffFundAddr.value.trim();
+            if (!addr || addr.length !== 42) { _cffFundInfo.style.display = 'none'; return null; }
+
+            var prov = _cffProvider();
+            if (!prov) { toast('error', 'Cần cài MetaMask!'); return null; }
+
+            _cffFundInfo.style.display = 'block';
+            _cffFundInfo.innerHTML = '<span style="color:#94a3b8;">⏳ Đang đọc két sắt...</span>';
+
+            try {
+                var f = new ethers.Contract(addr, FAUCET_INFO_ABI, prov);
+                var tokenAddr = await f.token();
+                var reward = await f.rewardAmount();
+
+                var t = new ethers.Contract(tokenAddr, ERC20_FUND_ABI, prov);
+                var dec = 18;    try { dec = await t.decimals(); } catch(e) {}
+                var sym = 'Coin';try { sym = await t.symbol(); }   catch(e) {}
+                var bal = await t.balanceOf(addr);
+
+                var rewardNum = parseFloat(ethers.utils.formatUnits(reward, dec));
+                var balNum    = parseFloat(ethers.utils.formatUnits(bal, dec));
+                var slots     = rewardNum > 0 ? Math.floor(balNum / rewardNum) : 0;
+
+                _cffFundInfo.innerHTML =
+                    '💎 Số dư két: <b style="color:#10b981;">' + balNum.toLocaleString('vi-VN', {maximumFractionDigits:4}) + ' ' + sym + '</b><br>'
+                  + '🎁 Thưởng mỗi em: <b style="color:#fcd34d;">' + rewardNum + ' ' + sym + '</b><br>'
+                  + (slots > 0
+                        ? '👥 Đủ trả cho <b style="color:#10b981;">' + slots + '</b> học sinh nữa'
+                        : '<b style="color:#ef4444;">⚠️ KÉT TRỐNG — học sinh làm đúng cũng KHÔNG nhận được coin!</b>');
+
+                return { tokenAddr: tokenAddr, dec: dec, sym: sym };
+            } catch(e) {
+                _cffFundInfo.innerHTML = '<span style="color:#ef4444;">❌ Không đọc được — địa chỉ này có đúng là Két Sắt không?</span>';
+                return null;
+            }
+        }
+
+        if (_cffFundCheck) _cffFundCheck.addEventListener('click', _cffCheckFaucet);
+        if (_cffFundAddr) {
+            var _cffFundTimer = null;
+            _cffFundAddr.addEventListener('input', function() {
+                clearTimeout(_cffFundTimer);
+                if (this.value.trim().length !== 42) { _cffFundInfo.style.display = 'none'; return; }
+                _cffFundTimer = setTimeout(_cffCheckFaucet, 500);
+            });
+        }
+
+        if (_cffFundBtn) {
+            _cffFundBtn.addEventListener('click', async function() {
+                if (!signer) { toast('error', 'Cần kết nối ví (🦊) trước!'); return; }
+
+                var addr = _cffFundAddr.value.trim();
+                if (!addr || addr.length !== 42) { toast('error', 'Nhập địa chỉ Két Sắt hợp lệ!'); return; }
+                var amt = _cffFundAmount.value.trim();
+                if (!amt || isNaN(amt) || parseFloat(amt) <= 0) { toast('error', 'Nhập số lượng hợp lệ!'); return; }
+
+                var info = await _cffCheckFaucet();
+                if (!info) { toast('error', 'Không đọc được Két Sắt!'); return; }
+
+                try {
+                    _cffFundBtn.disabled = true; _cffFundBtn.style.opacity = '0.5';
+                    _cffFundStatus.innerHTML = '<span style="color:#f59e0b;">⏳ Đang chuyển Coin vào két... (Xác nhận trên MetaMask)</span>';
+
+                    var t   = new ethers.Contract(info.tokenAddr, ERC20_FUND_ABI, signer);
+                    var wei = ethers.utils.parseUnits(amt, info.dec);
+
+                    var myBal = await t.balanceOf(userAddr);
+                    if (myBal.lt(wei)) {
+                        toast('error', 'Ví bạn không đủ ' + info.sym + '!');
+                        _cffFundStatus.innerHTML = '';
+                        return;
+                    }
+
+                    // Nạp két = chuyển thẳng coin cho contract, không cần approve
+                    var tx = await t.transfer(addr, wei);
+                    _cffFundStatus.innerHTML = '<span style="color:#f59e0b;">⛏️ Đang chờ Blockchain xác nhận...</span>';
+                    await tx.wait();
+
+                    _cffFundStatus.innerHTML = '<span style="color:#10b981;">✅ Đã nạp ' + amt + ' ' + info.sym + ' vào két!</span>';
+                    toast('success', '💰 Nạp két thành công!');
+                    _cffFundAmount.value = '';
+                    await _cffCheckFaucet();
+
+                } catch(e) {
+                    var msg = e.reason || e.message || 'Lỗi không xác định';
+                    if (msg.includes('user rejected')) msg = 'Bạn đã từ chối giao dịch!';
+                    _cffFundStatus.innerHTML = '<span style="color:#ef4444;">❌ ' + msg.substring(0, 80) + '</span>';
+                    toast('error', msg.substring(0, 50));
+                } finally {
+                    _cffFundBtn.disabled = false; _cffFundBtn.style.opacity = '1';
+                }
+            });
+        }
         if (_cffBtn) {
             _cffAddr.addEventListener('click', function() {
                 navigator.clipboard.writeText(this.innerText).then(() => {
@@ -138,6 +277,9 @@ export default {
 
                     _cffAddr.innerText = currentFaucetAddr;
                     _cffResult.style.display = 'block';
+
+                    // Đưa thẳng địa chỉ két mới xuống khung nạp tiền
+                    if (_cffFundAddr) { _cffFundAddr.value = currentFaucetAddr; _cffCheckFaucet(); }
                     
                     _cffStatus.innerHTML = '<span style="color:#10b981;">✅ Hoàn tất! Két sắt đã được đúc thành công!</span>';
                     toast('success', '🎉 Tạo Két sắt thành công!');

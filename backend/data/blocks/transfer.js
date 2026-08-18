@@ -475,10 +475,13 @@ export default {
             contractAddr = custEl ? custEl.value.trim() : '';
         }
         if(!contractAddr||contractAddr.length!==42){toast('error','Chưa nhập địa chỉ Contract hợp lệ!');return;}
-        
-        if(!contractAddr||contractAddr.length!==42){toast('error','Địa chỉ Contract không hợp lệ!');return;}
-        const toAddr=ai.value.trim();
-        if(!toAddr||!toAddr.startsWith('0x')||toAddr.length!==42){toast('error','Địa chỉ ví nhận không hợp lệ!');return;}
+
+        const toAddr = ai.value.trim();
+        if(!toAddr){toast('error','Chưa nhập địa chỉ ví người nhận!');return;}
+        if(/^(bc1|tb1)/i.test(toAddr)){toast('error','Đây là địa chỉ BITCOIN! Ví Ethereum phải bắt đầu bằng 0x.');return;}
+        if(!toAddr.startsWith('0x')){toast('error','Địa chỉ ví phải bắt đầu bằng 0x (bạn đang nhập "'+toAddr.substring(0,6)+'...")');return;}
+        if(toAddr.length!==42){toast('error','Địa chỉ ví phải đúng 42 ký tự — hiện có '+toAddr.length+' ký tự.');return;}
+        if(!/^0x[a-fA-F0-9]{40}$/.test(toAddr)){toast('error','Địa chỉ ví chứa ký tự lạ (chỉ được dùng số 0-9 và chữ a-f).');return;}
         
         try{
             toast('info','Đang chuẩn bị giao dịch...');

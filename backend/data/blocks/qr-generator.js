@@ -15,8 +15,11 @@ export default {
         </div>
         
         <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:15px;margin-bottom:12px;">
-            <label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:bold;">Link gốc của trang Nhận Quà (Web App của bạn)</label>
-            <input type="text" id="qrg-base-url" placeholder="VD: http://stem.app/apps/app-abc.html" style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;margin-bottom:12px;">
+            <label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:bold;">Link trang Nhận Quà <span style="color:#64748b;font-weight:400;">— tự điền link trang này</span></label>
+            <div style="display:flex;gap:6px;margin-bottom:12px;">
+                <input type="text" id="qrg-base-url" placeholder="VD: http://stem.app/apps/app-abc.html" style="flex:1;min-width:0;width:auto;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;">
+                <button id="qrg-use-here" style="width:auto;flex:0 0 auto;padding:10px 12px;border-radius:8px;border:1px solid #8b5cf6;background:rgba(139,92,246,0.12);color:#c4b5fd;font-size:11px;font-weight:bold;cursor:pointer;white-space:nowrap;">📍 Trang này</button>
+            </div>
 
             <label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:bold;">Địa chỉ Bộ Sưu Tập (Contract NFT/Huy hiệu)</label>
             <input type="text" id="qrg-col-addr" placeholder="0x..." style="width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:13px;outline:none;margin-bottom:12px;">
@@ -95,6 +98,22 @@ export default {
             script.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
             document.head.appendChild(script);
         }
+        // Giáo viên tạo QR ngay trong chính app mà học sinh sẽ mở,
+        // nên link gốc mặc định = địa chỉ trang hiện tại.
+        function _qrgFillHere() {
+            var el = document.getElementById('qrg-base-url');
+            if (!el) return;
+            el.value = window.location.origin + window.location.pathname;
+        }
+        var _qrgUseHere = document.getElementById('qrg-use-here');
+        if (_qrgUseHere) {
+            _qrgUseHere.addEventListener('click', function(){
+                _qrgFillHere();
+                toast('info', 'Đã điền link trang hiện tại');
+            });
+        }
+        var _qrgBaseEl = document.getElementById('qrg-base-url');
+        if (_qrgBaseEl && !_qrgBaseEl.value.trim()) _qrgFillHere();
     `,
     bindings: []
 }

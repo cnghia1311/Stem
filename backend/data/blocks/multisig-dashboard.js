@@ -1,14 +1,30 @@
-import { FACTORY_ADDRESSES } from '../contracts/contractFactorys.js';
+import { FACTORY_ADDRESSES } from "../contracts/contractFactorys.js";
 
 // ==================== KHỐI: BẢNG ĐIỀU KHIỂN QUỸ (MULTISIG DASHBOARD) ====================
 export default {
-    id: "multisig-dashboard",
-    name: "✍️ Bảng Điều Khiển Quỹ Lớp",
-    desc: "Quản lý Quỹ: Tạo đề xuất rút tiền, ký duyệt, thực thi lệnh giải ngân",
-    color: "#f59e0b",
-    label: "Bảng Điều Khiển Quỹ",
-    exportHtml: () => `
+  id: "multisig-dashboard",
+  name: "✍️ Bảng Điều Khiển Quỹ Lớp",
+  desc: "Quản lý Quỹ: Tạo đề xuất rút tiền, ký duyệt, thực thi lệnh giải ngân",
+  color: "#f59e0b",
+  label: "Bảng Điều Khiển Quỹ",
+
+  // ⬇️ MỚI: hiện ra ở panel "Thuộc Tính Khối" → mục Cấu Hình Hợp Đồng
+  contractFields: [
+    {
+      key: "displayToken",
+      label: "🪙 Token hiển thị số dư quỹ",
+      placeholder: "0x... (để trống = chỉ hiện ETH)",
+      type: "text",
+    },
+  ],
+
+  exportHtml: (tk, cfg) => {
+    const conf =
+      cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {};
+    const displayToken = conf.displayToken || "";
+    return `
     <div class="khoi" style="border-left-color:#f59e0b;">
+        <input type="hidden" id="msdb-display-token" value="${displayToken}">
         <div class="khoi-title" style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:24px;">✍️</span>
             <span style="background:linear-gradient(135deg,#f59e0b,#eab308);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900;font-size:16px;letter-spacing:1px;">BẢNG ĐIỀU KHIỂN QUỸ</span>
@@ -25,8 +41,12 @@ export default {
             <!-- Header thông tin quỹ -->
             <div id="msdb-header" style="display:none;">
                 <div style="background:#1e293b;padding:10px;border-radius:8px;margin-bottom:8px;">
+                    <div id="msdb-token-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #334155;">
+                        <span style="font-size:11px;color:#94a3b8;">💰 Quỹ lớp đang có:</span>
+                        <span id="msdb-token-balance" style="font-size:17px;font-weight:bold;color:#10b981;">0</span>
+                    </div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-size:11px;color:#94a3b8;">💎 Số dư ETH:</span>
+                        <span id="msdb-eth-label" style="font-size:11px;color:#94a3b8;">💎 Số dư ETH:</span>
                         <span id="msdb-balance" style="font-size:16px;font-weight:bold;color:#10b981;">0 ETH</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -79,9 +99,10 @@ export default {
             </div>
             <div id="msdb-txns-list" style="font-size:11px;color:#94a3b8;"></div>
         </div>
-    </div>`,
+    </div>`;
+  },
 
-    engineCode: () => `
+  engineCode: () => `
         const MULTISIG_FULL_ABI = [
             "function submitTransaction(address to, uint256 value, address token, uint256 tokenAmount, string note)",
             "function confirmTransaction(uint256 txId)",
@@ -99,6 +120,7 @@ export default {
             "event RevokeConfirmation(address indexed owner, uint256 indexed txId)",
             "event ExecuteTransaction(address indexed owner, uint256 indexed txId)"
         ];
+    
         const ERC20_VIEW_ABI = [
             "function symbol() view returns (string)",
             "function decimals() view returns (uint8)"
@@ -126,6 +148,47 @@ export default {
 
         // Short address
         function _shortAddr(a) { return a.substring(0,6) + '...' + a.substring(38); }
+
+        // ---- Token lớp do giáo viên cấu hình trong panel Thuộc Tính Khối ----
+        var _msdbDisplayEl = document.getElementById('msdb-display-token');
+        var MSDB_TOKEN = _msdbDisplayEl ? (_msdbDisplayEl.value || '').trim() : '';
+        var MSDB_HAS_TOKEN = MSDB_TOKEN.length === 42;
+
+        if (MSDB_HAS_TOKEN) {
+            // ETH lùi xuống thành dòng phụ, chỉ còn vai trò trả phí gas
+            var _msdbEthLabel = document.getElementById('msdb-eth-label');
+            var _msdbEthVal   = document.getElementById('msdb-balance');
+            if (_msdbEthLabel) { _msdbEthLabel.style.color = '#64748b'; _msdbEthLabel.textContent = '💎 ETH (chỉ để trả phí gas):'; }
+            if (_msdbEthVal)   { _msdbEthVal.style.fontSize = '11px'; _msdbEthVal.style.color = '#64748b'; }
+
+            // Mặc định rút bằng token lớp, điền sẵn địa chỉ
+            var _msdbTokInp = document.getElementById('msdb-token-addr');
+            if (_msdbTokInp) _msdbTokInp.value = MSDB_TOKEN;
+            var _msdbWType = document.getElementById('msdb-withdraw-type');
+            if (_msdbWType) {
+                _msdbWType.value = 'erc20';
+                document.getElementById('msdb-erc20-input').style.display = 'block';
+            }
+        }
+
+        async function _msdbRefreshTokenBalance() {
+            if (!MSDB_HAS_TOKEN || !_msdbContract) return;
+            var row = document.getElementById('msdb-token-row');
+            var out = document.getElementById('msdb-token-balance');
+            if (!row || !out) return;
+            row.style.display = 'flex';
+            out.textContent = '⏳ ...';
+            try {
+                var info = await _getTokenInfo(MSDB_TOKEN);
+                var bal  = await _msdbContract.getERC20Balance(MSDB_TOKEN);
+                var num  = parseFloat(ethers.utils.formatUnits(bal, info.decimals));
+                out.textContent = num.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) + ' ' + info.symbol;
+                out.style.color = '#10b981';
+            } catch(e) {
+                out.textContent = '❌ không đọc được';
+                out.style.color = '#ef4444';
+            }
+        }
 
         // Tải danh sách lệnh
         async function _msdbLoadTxns() {
@@ -289,9 +352,11 @@ export default {
                 toast('success', '🎉 Đã thực thi Đề Xuất #' + txId + ' thành công! Tiền đã giải ngân!');
                 _msdbLoadTxns();
                 // Refresh balance
+                // Refresh balance
                 try {
                     var bal = await provider.getBalance(_msdbFundAddr);
                     document.getElementById('msdb-balance').textContent = parseFloat(ethers.utils.formatEther(bal)).toFixed(6) + ' ETH';
+                    await _msdbRefreshTokenBalance();
                 } catch(e) {}
             } catch(e) {
                 var msg = e.reason || e.message || '';
@@ -330,6 +395,7 @@ export default {
 
                     // Header
                     document.getElementById('msdb-balance').textContent = parseFloat(ethers.utils.formatEther(bal)).toFixed(6) + ' ETH';
+                    await _msdbRefreshTokenBalance();
                     document.getElementById('msdb-owners-info').textContent = _msdbOwners.length + ' Owner';
                     document.getElementById('msdb-required-info').textContent = _msdbRequired + '/' + _msdbOwners.length + ' chữ ký';
 
@@ -439,5 +505,5 @@ export default {
             });
         }
     `,
-    bindings: []
-}
+  bindings: [],
+};

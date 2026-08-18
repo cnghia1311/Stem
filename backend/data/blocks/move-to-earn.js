@@ -30,7 +30,12 @@ export default {
             </div>
             <div style="font-size:10px;color:#64748b;margin-top:8px;">💡 Có thể gian lận bằng cách chỉnh số mét? Không lo, ở sự kiện thật bạn ẩn ô này đi là xong!</div>
         </div>
-
+        <!-- BƯỚC 1: CẤP QUYỀN GPS -->
+        <div id="m2e-gps-gate" style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:12px;">
+            <div style="font-size:12px;color:#94a3b8;font-weight:bold;margin-bottom:8px;">🛰️ Bước 1 — Cho phép truy cập Vị trí</div>
+            <button id="m2e-gps-btn" style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;font-size:14px;font-weight:800;cursor:pointer;letter-spacing:0.5px;">🛰️ KẾT NỐI GPS</button>
+            <div id="m2e-gps-perm" style="margin-top:8px;font-size:11px;color:#94a3b8;text-align:center;line-height:1.5;">Chưa kết nối — bấm nút trên để cấp quyền Vị trí.</div>
+        </div>
         <div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;margin-bottom:15px;border:2px dashed #22c55e;">
             <div style="font-size:12px;color:#cbd5e1;margin-bottom:10px;font-weight:bold;">TIẾN ĐỘ HOÀN THÀNH</div>
             <div style="font-size:36px;font-weight:900;color:#22c55e;margin-bottom:10px;" id="m2e-progress-text">0 / 500m</div>
@@ -42,7 +47,7 @@ export default {
             <div id="m2e-gps-status" style="font-size:11px;color:#94a3b8;">🛑 Đang chờ bắt đầu...</div>
         </div>
 
-        <button id="m2e-start-btn" style="width:100%;padding:14px;border-radius:10px;border:none;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:1px;margin-bottom:10px;box-shadow:0 4px 15px rgba(59,130,246,0.3);">🏃 BẮT ĐẦU CHẠY BỘ</button>
+        <button id="m2e-start-btn" disabled style="width:100%;padding:14px;border-radius:10px;border:none;background:#475569;color:#94a3b8;font-size:15px;font-weight:800;cursor:not-allowed;letter-spacing:1px;margin-bottom:10px;">🏃 BẮT ĐẦU CHẠY BỘ</button>
         
         <button id="m2e-claim-btn" style="width:100%;padding:14px;border-radius:10px;border:none;background:linear-gradient(135deg,#ec4899,#be185d);color:white;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:1px;display:none;box-shadow:0 4px 15px rgba(236,72,153,0.4);animation: pulse 1.5s infinite;">🎁 ĐÚC NFT PHẦN THƯỞNG</button>
         
@@ -72,6 +77,77 @@ export default {
         var m2eProgressBar = document.getElementById('m2e-progress-bar');
         var m2eGpsStatus = document.getElementById('m2e-gps-status');
         var m2eTxStatus = document.getElementById('m2e-status');
+        var m2eGpsBtn  = document.getElementById('m2e-gps-btn');
+        var m2eGpsPerm = document.getElementById('m2e-gps-perm');
+        var gpsReady = false;
+
+        function m2eSetPerm(msg, color) {
+            if (m2eGpsPerm) m2eGpsPerm.innerHTML = '<span style="color:' + (color || '#94a3b8') + '">' + msg + '</span>';
+        }
+
+        function m2eUnlockStart(ok) {
+            gpsReady = ok;
+            if (!m2eStartBtn) return;
+            m2eStartBtn.disabled = !ok;
+            m2eStartBtn.style.background = ok ? 'linear-gradient(135deg,#3b82f6,#2563eb)' : '#475569';
+            m2eStartBtn.style.color      = ok ? '#fff' : '#94a3b8';
+            m2eStartBtn.style.cursor     = ok ? 'pointer' : 'not-allowed';
+            m2eStartBtn.style.boxShadow  = ok ? '0 4px 15px rgba(59,130,246,0.3)' : 'none';
+        }
+
+        function m2eGpsOk(accuracy) {
+            m2eUnlockStart(true);
+            if (m2eGpsBtn) {
+                m2eGpsBtn.innerText = '✅ GPS ĐÃ SẴN SÀNG';
+                m2eGpsBtn.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+            }
+            m2eSetPerm('✅ Đã cấp quyền Vị trí'
+                + (accuracy ? ' (sai số ~' + Math.round(accuracy) + 'm)' : '')
+                + ' — bấm BẮT ĐẦU CHẠY BỘ ở dưới.', '#10b981');
+        }
+
+        // Kiểm tra điều kiện ngay khi mở trang
+        (function m2eCheckGps() {
+            if (!('geolocation' in navigator)) {
+                m2eSetPerm('❌ Trình duyệt này không hỗ trợ GPS.', '#ef4444');
+                return;
+            }
+            if (!window.isSecureContext) {
+                m2eSetPerm('❌ Trang đang chạy HTTP nên trình duyệt CHẶN GPS.<br>Phải mở bằng <b>https://</b> hoặc <b>localhost</b>.', '#ef4444');
+                return;
+            }
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' }).then(function(st) {
+                    if (st.state === 'granted') m2eGpsOk();
+                    else if (st.state === 'denied') m2eSetPerm('🚫 Bạn đã CHẶN quyền Vị trí. Bấm ổ khoá 🔒 trên thanh địa chỉ → bật lại Vị trí → tải lại trang.', '#ef4444');
+                    st.onchange = function() { if (st.state === 'granted') m2eGpsOk(); };
+                }).catch(function(){});
+            }
+        })();
+
+        if (m2eGpsBtn) {
+            m2eGpsBtn.addEventListener('click', function() {
+                if (!('geolocation' in navigator)) { toast('error', 'Thiết bị không hỗ trợ GPS!'); return; }
+                if (!window.isSecureContext) { toast('error', 'Phải mở trang bằng HTTPS mới dùng được GPS!'); return; }
+
+                m2eGpsBtn.disabled = true;
+                m2eSetPerm('⏳ Đang xin quyền và dò vệ tinh...', '#38bdf8');
+
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    m2eGpsBtn.disabled = false;
+                    m2eGpsOk(pos.coords.accuracy);
+                    toast('success', '🛰️ Đã kết nối GPS!');
+                }, function(err) {
+                    m2eGpsBtn.disabled = false;
+                    var s = 'Không lấy được vị trí.';
+                    if (err.code === 1) s = '🚫 Bạn đã từ chối quyền Vị trí. Bấm ổ khoá 🔒 trên thanh địa chỉ → cho phép Vị trí → thử lại.';
+                    if (err.code === 2) s = '📡 Không bắt được tín hiệu. Hãy ra ngoài trời thoáng rồi thử lại.';
+                    if (err.code === 3) s = '⌛ Quá thời gian chờ. Thử lại lần nữa.';
+                    m2eSetPerm(s, '#ef4444');
+                    toast('error', s.replace(/<[^>]+>/g, '').substring(0, 60));
+                }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+            });
+        }
 
         // Tự động điền qua URL Parameter để giáo viên tạo mã QR dễ dàng
         try {
@@ -159,9 +235,9 @@ export default {
         if(m2eStartBtn) {
             m2eStartBtn.addEventListener('click', function() {
                 if(!isTracking) {
-                    // BẮT ĐẦU CHẠY
-                    if (!navigator.geolocation) {
-                        toast('error', 'Trình duyệt hoặc điện thoại của bạn không hỗ trợ GPS!');
+                    // BẮT ĐẦU CHẠY — chỉ chạy được sau khi đã cấp quyền GPS ở Bước 1
+                    if (!gpsReady) {
+                        toast('error', 'Hãy bấm 🛰️ KẾT NỐI GPS ở trên trước!');
                         return;
                     }
                     isTracking = true;
