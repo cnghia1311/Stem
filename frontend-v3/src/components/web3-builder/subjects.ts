@@ -13,7 +13,7 @@ export const LESSONS = [
     { id: "web3-sports", name: "🏃‍♂️ Bài 12: Vận Động Nhận Thưởng", blocks: ["wallet", "erc1155-factory", "update-erc1155", "grant-minter-1155", "move-to-earn"] },
     { id: "treasure-hunt-lesson", name: "🗺️ Bài 13: Định Vị Tọa Độ (GPS)", blocks: ["wallet", "erc1155-factory", "update-erc1155", "grant-minter-1155", "treasure-hunt"] },
     { id: "quiz-to-earn", name: "📝 Bài 14: Học Tập Nhận Thưởng", blocks: ["wallet","coin-faucet-factory", "quiz-to-earn", "erc20-factory"] },
-    { id: "nft-auction", name: "🔨 Bài 15: Sàn Đấu Giá", blocks: ["wallet", "auction-factory", "auction-create", "auction-bid"] },
+    { id: "nft-auction", name: "🔨 Bài 15: Sàn Đấu Giá", blocks: ["wallet", "erc721-factory", "mint-nft", "erc20-factory", "transfer", "auction-factory", "auction-create", "auction-bid"] },
     { id: "defi-staking", name: "🏛️ Bài 16: Két Sắt Sinh Lời (Staking)", blocks: ["wallet", "erc20-factory", "staking-factory", "staking-dashboard"] },
     { id: "liquid-staking", name: "🏛️ Bài 17: Phái Sinh Thanh Khoản", blocks: ["wallet", "erc20-factory", "liquid-factory", "liquid-dashboard"] },
     { id: "launchpad", name: "🚀 Bài 18: Gọi Vốn Cộng Đồng (IDO)", blocks: ["wallet", "erc20-factory", "launchpad-factory", "launchpad-dashboard"] }
